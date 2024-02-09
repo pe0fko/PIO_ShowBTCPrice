@@ -18,9 +18,20 @@
 #include <ArduinoJson.h>
 
 #if 1
-
+/*
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            41:d2:9d:d1:72:ea:ee:a7:80:c1:2c:6c:e9:2f:87:52
+        Signature Algorithm: ecdsa-with-SHA384
+        Issuer: C = US, O = Internet Security Research Group, CN = ISRG Root X2
+        Validity
+            Not Before: Sep  4 00:00:00 2020 GMT
+            Not After : Sep 17 16:00:00 2040 GMT
+        Subject: C = US, O = Internet Security Research Group, CN = ISRG Root X2
+*/
 const char* https_host = "https://api.bitvavo.com/v2/ticker/24h?market=BTC-EUR";
-
 const char rootCACertificate [] PROGMEM = R"CERT(
 -----BEGIN CERTIFICATE-----
 MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw
