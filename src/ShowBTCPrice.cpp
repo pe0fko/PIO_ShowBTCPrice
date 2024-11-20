@@ -10,14 +10,64 @@
 #include <WiFi.h>
 #include <WiFiMulti.h>
 //#include <TZ.h>
-
 #include <HTTPClient.h>
-
 #include <WiFiClientSecure.h>
-
 #include <ArduinoJson.h>
 
 #if 1
+
+//// echo | openssl s_client -showcerts -servername api.bitvavo.com -connect api.bitvavo.com:443 | openssl x509 -inform pem  -text
+
+/*
+ * Find all the certificate....
+ * openssl s_client -showcerts -servername api.bitvavo.com -connect api.bitvavo.com:443
+ * openssl x509 -in cert.x509 -text
+ * 
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            b0:57:3e:91:73:97:27:70:db:b4:87:cb:3a:45:2b:38
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: C = US, O = Internet Security Research Group, CN = ISRG Root X1
+        Validity
+            Not Before: Mar 13 00:00:00 2024 GMT
+            Not After : Mar 12 23:59:59 2027 GMT
+        Subject: C = US, O = Let's Encrypt, CN = E6
+*/
+
+const char* https_host = "https://api.bitvavo.com/v2/ticker/24h?market=BTC-EUR";
+const char rootCACertificate [] PROGMEM = R"CERT(
+-----BEGIN CERTIFICATE-----
+MIIEVzCCAj+gAwIBAgIRALBXPpFzlydw27SHyzpFKzgwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMjQwMzEzMDAwMDAw
+WhcNMjcwMzEyMjM1OTU5WjAyMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3Mg
+RW5jcnlwdDELMAkGA1UEAxMCRTYwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAATZ8Z5G
+h/ghcWCoJuuj+rnq2h25EqfUJtlRFLFhfHWWvyILOR/VvtEKRqotPEoJhC6+QJVV
+6RlAN2Z17TJOdwRJ+HB7wxjnzvdxEP6sdNgA1O1tHHMWMxCcOrLqbGL0vbijgfgw
+gfUwDgYDVR0PAQH/BAQDAgGGMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQcD
+ATASBgNVHRMBAf8ECDAGAQH/AgEAMB0GA1UdDgQWBBSTJ0aYA6lRaI6Y1sRCSNsj
+v1iU0jAfBgNVHSMEGDAWgBR5tFnme7bl5AFzgAiIyBpY9umbbjAyBggrBgEFBQcB
+AQQmMCQwIgYIKwYBBQUHMAKGFmh0dHA6Ly94MS5pLmxlbmNyLm9yZy8wEwYDVR0g
+BAwwCjAIBgZngQwBAgEwJwYDVR0fBCAwHjAcoBqgGIYWaHR0cDovL3gxLmMubGVu
+Y3Iub3JnLzANBgkqhkiG9w0BAQsFAAOCAgEAfYt7SiA1sgWGCIpunk46r4AExIRc
+MxkKgUhNlrrv1B21hOaXN/5miE+LOTbrcmU/M9yvC6MVY730GNFoL8IhJ8j8vrOL
+pMY22OP6baS1k9YMrtDTlwJHoGby04ThTUeBDksS9RiuHvicZqBedQdIF65pZuhp
+eDcGBcLiYasQr/EO5gxxtLyTmgsHSOVSBcFOn9lgv7LECPq9i7mfH3mpxgrRKSxH
+pOoZ0KXMcB+hHuvlklHntvcI0mMMQ0mhYj6qtMFStkF1RpCG3IPdIwpVCQqu8GV7
+s8ubknRzs+3C/Bm19RFOoiPpDkwvyNfvmQ14XkyqqKK5oZ8zhD32kFRQkxa8uZSu
+h4aTImFxknu39waBxIRXE4jKxlAmQc4QjFZoq1KmQqQg0J/1JF8RlFvJas1VcjLv
+YlvUB2t6npO6oQjB3l+PNf0DpQH7iUx3Wz5AjQCi6L25FjyE06q6BZ/QlmtYdl/8
+ZYao4SRqPEs/6cAiF+Qf5zg2UkaWtDphl1LKMuTNLotvsX99HP69V2faNyegodQ0
+LyTApr/vT01YPE46vNsDLgK+4cL6TrzC/a4WcmF5SRJ938zrv/duJHLXQIku5v0+
+EwOy59Hdm0PT/Er/84dDV0CSjdR/2XuZM3kpysSKLgD1cKiDA+IRguODCxfO9cyY
+Ig46v9mFmBvyH04=
+-----END CERTIFICATE-----
+)CERT";
+
+
+#elif 1
 /*
 Certificate:
     Data:
@@ -93,7 +143,9 @@ yOGBQMkKW+ESPMFgKuOXwIlCypTPRpgSabuY0MLTDXJLR27lk8QyKGOHQ+SwMj4K
 
 #endif
 
-const   uint32_t  Access_Value     = 20 * 1000;
+void JsonDecode(const char* json);
+
+const   uint32_t  Access_Value     = 60 * 1000;
 static  uint32_t  Access_Timer     = 0;
 
 // ./.arduino15/packages/esp8266/hardware/esp8266/3.1.2/cores/esp8266/TZ.h
@@ -162,6 +214,7 @@ void loop()
   {
     Access_Timer += Access_Value;
 
+
     WiFiClientSecure *client = new WiFiClientSecure;
     if(client) 
     {
@@ -187,7 +240,8 @@ void loop()
             // file found at server
             if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
               String payload = https.getString();
- //             Serial.println(payload);
+ 
+//              Serial.println(payload);
 
               JsonDecode(payload.c_str());
             }
@@ -279,23 +333,4 @@ void JsonDecode(const char* json)
 
   bk_last_prev = bk_last;
 
-/*
-  const char* sensor = doc["last"];
-  Serial.println(sensor);
-
-  // Fetch the values
-  //
-  // Most of the time, you can rely on the implicit casts.
-  // In other case, you can do doc["time"].as<long>();
-  const char* sensor = doc["sensor"];
-  long time = doc["time"];
-  double latitude = doc["data"][0];
-  double longitude = doc["data"][1];
-
-  // Print the values
-  Serial.println(sensor);
-  Serial.println(time);
-  Serial.println(latitude, 6);
-  Serial.println(longitude, 6);
-*/
 }
