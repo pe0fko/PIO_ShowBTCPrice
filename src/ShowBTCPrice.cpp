@@ -13,15 +13,32 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_SSD1306.h>		// Adafruit SSD1306 Wemos Mini OLED
+#include <WiFi_SSID.h>
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
 
 #if 1
 
-//// echo | openssl s_client -showcerts -servername api.bitvavo.com -connect api.bitvavo.com:443 | openssl x509 -inform pem  -text
+//	client->setInsecure();
+const char* https_host = "https://api.bitvavo.com/v2/ticker/24h?market=BTC-EUR";
 
+#elif 1
+//// echo | openssl s_client -showcerts -servername api.bitvavo.com -connect api.bitvavo.com:443 | openssl x509 -inform pem  -text
 /*
  * Find all the certificate....
  * openssl s_client -showcerts -servername api.bitvavo.com -connect api.bitvavo.com:443
  * openssl x509 -in cert.x509 -text
+ *
+ *	client->setCACert(rootCACertificate);
  * 
 Certificate:
     Data:
@@ -143,156 +160,169 @@ yOGBQMkKW+ESPMFgKuOXwIlCypTPRpgSabuY0MLTDXJLR27lk8QyKGOHQ+SwMj4K
 
 #endif
 
-void JsonDecode(const char* json);
+const		uint32_t	Access_Value	= 60UL * 1000;
+static		uint32_t	Access_Timer	= 0UL;
 
-const   uint32_t  Access_Value     = 60 * 1000;
-static  uint32_t  Access_Timer     = 0;
+void		JsonDecode(const char* json);
+
+WiFiMulti	wifiMulti;
+
 
 // ./.arduino15/packages/esp8266/hardware/esp8266/3.1.2/cores/esp8266/TZ.h
 //#define TZ_Europe_Amsterdam     PSTR("CET-1CEST,M3.5.0,M10.5.0/3")
 
 // Not sure if WiFiClientSecure checks the validity date of the certificate. 
 // Setting clock just to be sure...
-void setClock() {
+void setClock() 
+{
 //  configTime(0, 0, "pool.ntp.org");
-  configTime(0, 0, "time.google.com");
+	configTime(0, 0, "time.google.com");
 //	configTime(TZ_Europe_Amsterdam, "time.google.com","nl.pool.ntp.org");
 
-  Serial.print(F("Waiting for NTP time sync: "));
-  time_t nowSecs = time(nullptr);
-  while (nowSecs < 8 * 3600 * 2) {
-    delay(500);
-    Serial.print(F("."));
-    yield();
-    nowSecs = time(nullptr);
-  }
+	Serial.print(F("Waiting for NTP time sync: "));
+	time_t nowSecs = time(nullptr);
+	while (nowSecs < 8 * 3600 * 2) {
+		delay(500);
+		Serial.print(F("."));
+		yield();
+		nowSecs = time(nullptr);
+	}
 
-  Serial.println();
-  struct tm timeinfo;
-  gmtime_r(&nowSecs, &timeinfo);
-  Serial.print(F("Current time: "));
-  Serial.print(asctime(&timeinfo));
+	Serial.println();
+	struct tm timeinfo;
+	gmtime_r(&nowSecs, &timeinfo);
+	Serial.print(F("Current time: "));
+	Serial.print(asctime(&timeinfo));
 }
 
 
-WiFiMulti WiFiMulti;
-
 void setup() 
 {
-  Serial.begin(115200);
-  Serial.setDebugOutput(true);
-  while(!Serial) ;
+	Serial.begin(115200);
+	Serial.setDebugOutput(true);
+	while(!Serial) ;
 
-  Serial.println();
-  Serial.println("Starting...........");
-  Serial.println();
+	Serial.println("====     Show BTC Price     ====");
+	Serial.println(F("DATE:" __DATE__ " - TIME:" __TIME__));
 
-  WiFi.mode(WIFI_STA);
-  WiFiMulti.addAP("pe0fko_ziggo", "NetwerkBeheer114");
+	// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+	if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+		Serial.println(F("SSD1306 allocation failed"));
+		for(;;); // Don't proceed, loop forever
+	}
 
-  // wait for WiFi connection
-  Serial.print("Waiting for WiFi to connect...");
-  while ((WiFiMulti.run() != WL_CONNECTED)) {
-    Serial.print(".");
-  }
-  Serial.println(" connected");
+	display.clearDisplay();
+	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+	display.setTextColor(SSD1306_WHITE); // Draw white text
+	display.setCursor(0, 4);     // Start at top-left corner
+	display.print(F("WiFi connect"));
+	display.display();
 
-//  setClock();  
+	WiFi.mode(WIFI_STA);
+	for(uint8_t i = 0; i < WifiApListNumber; i++)
+		wifiMulti.addAP(WifiApList[i].ssid, WifiApList[i].passwd);
 
-	time_t now = time(nullptr);			// get UNIX timestamp
-	Serial.printf("Time: %s\n", ctime(&now));					// convert timestamp and display
+	// wait for WiFi connection
+//	Serial.print("Waiting for WiFi to connect...");
+//	while ((wifiMulti.run() != WL_CONNECTED)) {
+//		Serial.print(".");
+//	}
+//	Serial.println(" connected");
 
-  Serial.print("Access host: ");
-  Serial.println(https_host);
+//	setClock();  
+	configTime(0, 0, "time.google.com");
 
-  Access_Timer = millis() - Access_Value;
+//	time_t now = time(nullptr);			// get UNIX timestamp
+//	Serial.printf("Time: %s\n", ctime(&now));					// convert timestamp and display
+
+	Serial.print("Access host: ");
+	Serial.println(https_host);
+
+	display.clearDisplay();
+	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+	display.setTextColor(SSD1306_WHITE); // Draw white text
+	display.setCursor(0, 4);     // Start at top-left corner
+	display.print(https_host);
+	display.display();
+
+	Access_Timer = millis() - Access_Value;
 }
 
 void loop() 
 {
-  if (millis() - Access_Timer > Access_Value)
-  {
-    Access_Timer += Access_Value;
+	if ((wifiMulti.run() != WL_CONNECTED)) {
+		Serial.println(F("WiFI Multi connect."));
+	}
 
+	if (millis() - Access_Timer > Access_Value)
+	{
+		Access_Timer += Access_Value;
 
-    WiFiClientSecure *client = new WiFiClientSecure;
-    if(client) 
-    {
-      client -> setCACert(rootCACertificate);
+		time_t now = time(nullptr);
+		Serial.printf("Date/Time: %s", ctime(&now));
 
-      {
-        // Add a scoping block for HTTPClient https to make sure it is destroyed before WiFiClientSecure *client is 
-        HTTPClient https;
-    
-//        Serial.print("[HTTPS] begin...\n");
+		WiFiClientSecure *client = new WiFiClientSecure;
+		if(client) 
+		{
+			client->setInsecure();
+//			client->setCACert(rootCACertificate);
 
-        if (https.begin(*client, https_host))  // HTTPS
-        {
-//          Serial.print("[HTTPS] GET...\n");
-          // start connection and send HTTP header
-          int httpCode = https.GET();
-    
-          // httpCode will be negative on error
-          if (httpCode > 0) {
-            // HTTP header has been send and Server response header has been handled
-//            Serial.printf("[HTTPS] GET... code: %d\n", httpCode);
-    
-            // file found at server
-            if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-              String payload = https.getString();
- 
-//              Serial.println(payload);
-
-              JsonDecode(payload.c_str());
-            }
-          } else {
-            Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
-          }
-    
-          https.end();
-        } else {
-          Serial.printf("[HTTPS] Unable to connect\n");
-        }
-
-        // End extra scoping block
-      }
-    
-      delete client;
-    } else {
-      Serial.println("Unable to create client");
-    }
-  }
-
-#if 1
-#elif 0
-  Serial.println();
-  Serial.println("Waiting 10s before the next round...");
-  delay(30 * 1000);
-#else
-  while(1)
-  {
-    Serial.println();
-//    Serial.println("Waiting 10s before the next round...");
-    delay(10000);
-    yield();
-  }
-#endif
+	        // Add a scoping block for HTTPClient https to make sure it is destroyed before WiFiClientSecure *client is 
+	        HTTPClient https;
+	    
+//			Serial.print("[HTTPS] begin...\n");
+			if (https.begin(*client, https_host))  // HTTPS
+			{
+//				Serial.print("[HTTPS] GET...\n");
+				// start connection and send HTTP header
+				int httpCode = https.GET();
+	    
+				// httpCode will be negative on error
+				if (httpCode > 0) {
+					// HTTP header has been send and Server response header has been handled
+//					Serial.printf("[HTTPS] GET... code: %d\n", httpCode);
+	    
+					// file found at server
+					if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) 
+					{
+						String payload = https.getString();
+//						Serial.println(payload);
+						JsonDecode(payload.c_str());
+					}
+				} 
+				else 
+				{
+				Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
+				}
+				https.end();
+	        } 
+			else 
+			{
+	          Serial.printf("[HTTPS] Unable to connect\n");
+	        }
+			delete client;
+		} 
+		else 
+		{
+			Serial.println("Unable to create client");
+		}
+	}
 }
 
 void JsonDecode(const char* json)
 {
-  // Allocate the JSON document
-  JsonDocument doc;
+	// Allocate the JSON document
+	JsonDocument doc;
 
-  // Deserialize the JSON document
-  DeserializationError error = deserializeJson(doc, json);
+	// Deserialize the JSON document
+	DeserializationError error = deserializeJson(doc, json);
 
-  // Test if parsing succeeds
-  if (error) {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.f_str());
-    return;
-  }
+	// Test if parsing succeeds
+	if (error) {
+		Serial.print(F("deserializeJson() failed: "));
+		Serial.println(error.f_str());
+		return;
+	}
 
 
 /*  {"market":"BTC-EUR","startTimestamp":1707345544376,"timestamp":1707431944376,
@@ -310,27 +340,73 @@ void JsonDecode(const char* json)
     "volumeQuote":"39236728.00683897"}
 */
 
-  int   bk_open     = doc["open"];
-  int   bk_high     = doc["high"];
-  int   bk_low      = doc["low"];
-  int   bk_last     = doc["last"];
-  int   bk_bid      = doc["bid"];
-  float bk_bidSize  = doc["bidSize"];
-  int   bk_ask      = doc["ask"];
-  float bk_askSize  = doc["askSize"];
-  float bk_volume   = doc["volume"];
- 
-  static  int   bk_last_prev = 0;
-  if (bk_last_prev == 0) bk_last_prev = bk_last;
+	int   bk_open     = doc["open"];
+	int   bk_high     = doc["high"];
+	int   bk_low      = doc["low"];
+	int   bk_last     = doc["last"];
+	int   bk_bid      = doc["bid"];
+	float bk_bidSize  = doc["bidSize"];
+	int   bk_ask      = doc["ask"];
+	float bk_askSize  = doc["askSize"];
+	float bk_volume   = doc["volume"];
 
-  Serial.printf(
-    "Open:%5d (%5d -- %5d) Last:%5d(%4d),  Bid:%5d(%3d) Vol:%4.2f,  Ask:%5d(%3d) Size:%.4f Vol:%4.2f,  (%.2f)\n",
-    bk_open, bk_low, bk_high, bk_last, bk_last-bk_last_prev,
-    bk_bid, bk_bid-bk_last, bk_bidSize, 
-    bk_ask, bk_ask-bk_last, bk_askSize, bk_volume,
-    0.20664391 * bk_last
-   );
+	static  int   bk_last_prev = 0;
+	if (bk_last_prev == 0) bk_last_prev = bk_last;
 
-  bk_last_prev = bk_last;
+	Serial.printf(
+		"Open:%5d (%5d -- %5d) Last:%5d(%4d),  Bid:%5d(%3d) Vol:%4.2f,  Ask:%5d(%3d) Size:%.4f Vol:%4.2f,  (%.2f)\n",
+		bk_open, bk_low, bk_high, bk_last, bk_last-bk_last_prev,
+		bk_bid, bk_bid-bk_last, bk_bidSize, 
+		bk_ask, bk_ask-bk_last, bk_askSize, bk_volume,
+		0.20664391 * bk_last
+		);
 
+	bk_last_prev = bk_last;
+
+
+	display.clearDisplay();
+	display.invertDisplay(false);
+	display.setTextColor(SSD1306_WHITE); // Draw white text
+	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+	display.setCursor(0, 32-8);     // Start at top-left corner
+	display.print("pe0fko");
+	display.setCursor(128-3*6, 32-8+1);     // Start at top-left corner
+	display.print("BTC");
+
+	display.setTextSize(3);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+	display.setCursor(18, 4);     // Start at top-left corner
+
+	if (bk_last >= 1000) 
+	{
+		int nr;
+
+		display.setCursor(128/2-18/2+2, 3);
+		display.print('.');
+		display.setCursor(128/2+8, 3);
+
+		nr = bk_last % 1000;
+		if      (nr < 100)	display.print('0');
+		else if (nr < 10)	display.print('0');
+		display.print(nr);
+
+		nr = bk_last / 1000;
+		if (nr < 100) {
+			display.setCursor(128/2-2*18-1, 3);
+			display.print(nr);
+		} else
+		if (nr < 1000) {
+//			display.invertDisplay(true);
+			display.setCursor(128/2-3*18-1, 3);
+			display.print(nr);
+		} else {
+			display.invertDisplay(true);
+			display.setCursor(0, 3);
+			display.print(nr);
+		}
+	} else {
+		display.setCursor((128-3*18)/2, 3);
+		display.print(bk_last);
+	}
+
+	display.display();
 }
