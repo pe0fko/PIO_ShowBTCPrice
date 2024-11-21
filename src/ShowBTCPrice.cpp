@@ -15,6 +15,7 @@
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <Wire.h>
+//#include <Adafruit_GFX.h>			// Adafruit GFX Library
 #include <Adafruit_SSD1306.h>		// Adafruit SSD1306 Wemos Mini OLED
 #include <WiFi_SSID.h>
 
@@ -164,8 +165,14 @@ const		uint32_t	Access_Value	= 60UL * 1000;
 static		uint32_t	Access_Timer	= 0UL;
 
 void		JsonDecode(const char* json);
+void		displayBTC(int nr);
+void		displayGraph(int nr);
 
 WiFiMulti	wifiMulti;
+
+int			graph[128]					= {0};
+int			graphLength					= 0;
+
 
 
 // ./.arduino15/packages/esp8266/hardware/esp8266/3.1.2/cores/esp8266/TZ.h
@@ -258,8 +265,8 @@ void loop()
 	{
 		Access_Timer += Access_Value;
 
-		time_t now = time(nullptr);
-		Serial.printf("Date/Time: %s", ctime(&now));
+//		time_t now = time(nullptr);
+//		Serial.printf("Date/Time: %s", ctime(&now));
 
 		WiFiClientSecure *client = new WiFiClientSecure;
 		if(client) 
@@ -363,50 +370,75 @@ void JsonDecode(const char* json)
 
 	bk_last_prev = bk_last;
 
+	displayBTC(bk_last);
+	displayGraph(bk_last);
+	display.display();
+}
 
+void displayGraph(int nr)
+{
+	const int L = 128;		// 128, 64, 32...
+	int min = 10000000;
+	int max = 0;
+	int range;
+
+	if (graphLength < L) {
+		graph[graphLength++] = nr;
+	} else {
+		memcpy((void*)&graph[0], (void*)&graph[1], (L-1)*sizeof(int));
+		graph[L-1] = nr;
+	}
+
+	for (int i = 0; i < graphLength; i++) {
+		if (graph[i] > max)	max = graph[i];
+		if (graph[i] < min)	min = graph[i];
+	}
+	range = max - min;
+
+	Serial.printf("Range: %d - (%d-%d)\n", range, min, max);
+	display.setTextSize(1);						// 6x8
+	display.setCursor(128-3*6-6-4*6, 32-8+1);
+	display.printf("%4d", range);
+
+	for (int i = 0; i < graphLength; i++) {
+		int n = graph[i];
+		n -= min;
+		n *= 31;
+		n /= range;
+		if (range == 0) n = 0;
+		display.drawPixel(i * 128 / L, 31-n, SSD1306_INVERSE);
+	}
+}
+
+void displayBTC(int nr)
+{
 	display.clearDisplay();
 	display.invertDisplay(false);
 	display.setTextColor(SSD1306_WHITE); // Draw white text
 	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
-	display.setCursor(0, 32-8);     // Start at top-left corner
-	display.print("pe0fko");
+
+//	display.setCursor(0, 32-8);     // Start at top-left corner
+//	display.print("pe0fko");
 	display.setCursor(128-3*6, 32-8+1);     // Start at top-left corner
 	display.print("BTC");
 
 	display.setTextSize(3);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 	display.setCursor(18, 4);     // Start at top-left corner
 
-	if (bk_last >= 1000) 
+	if (nr >= 1000) 
 	{
-		int nr;
+		display.setCursor(8, 3);
+		display.printf("%3d", nr / 1000);
+		// Draw dot
+		int x = display.getCursorX();
+		display.drawFastHLine(x, 3+24-5-2, 3, SSD1306_WHITE);
+		display.drawFastHLine(x, 3+24-4-2, 3, SSD1306_WHITE);
+		display.drawFastHLine(x, 3+24-3-2, 3, SSD1306_WHITE);
 
-		display.setCursor(128/2-18/2+2, 3);
-		display.print('.');
-		display.setCursor(128/2+8, 3);
-
-		nr = bk_last % 1000;
-		if      (nr < 100)	display.print('0');
-		else if (nr < 10)	display.print('0');
-		display.print(nr);
-
-		nr = bk_last / 1000;
-		if (nr < 100) {
-			display.setCursor(128/2-2*18-1, 3);
-			display.print(nr);
-		} else
-		if (nr < 1000) {
-//			display.invertDisplay(true);
-			display.setCursor(128/2-3*18-1, 3);
-			display.print(nr);
-		} else {
-			display.invertDisplay(true);
-			display.setCursor(0, 3);
-			display.print(nr);
-		}
+		display.setCursor(x+6, 3);
+		display.printf("%03d", nr % 1000);
 	} else {
-		display.setCursor((128-3*18)/2, 3);
-		display.print(bk_last);
+		display.setCursor(16+3*18+6, 3);
+		display.printf("%3d", nr);
 	}
-
-	display.display();
 }
