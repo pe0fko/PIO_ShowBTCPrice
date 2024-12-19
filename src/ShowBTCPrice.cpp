@@ -329,6 +329,7 @@ void displayGraph(int nr)
 	range = max - min;
 
 	Serial.printf("Range: %d - (%d-%d)\n", range, min, max);
+	display.setTextSize(1);      			// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 	display.setCursor(128-3*6-6-4*6, 32-8+1);
 	display.printf("%4d", range);
 
@@ -347,11 +348,10 @@ void displayBTC(int nr)
 	display.setCursor(128-3*6, 32-8+1);     // Start at top-left corner
 	display.print("BTC");
 
-	display.setTextSize(3);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
-	display.setCursor(18, 4);     // Start at top-left corner
+	display.setTextSize(3);      			// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+	display.setCursor(18, 4);				// Start at top-left corner
 
-	if (nr >= 1000) 
-	{
+	if (nr >= 1000) {
 		display.setCursor(8, 3);
 		display.printf("%3d", nr / 1000);
 		// Draw dot
