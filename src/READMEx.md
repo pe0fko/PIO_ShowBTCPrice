@@ -1,4 +1,5 @@
 # ShowBTCPrice
+
 Show the actual BTC price from the BitVavo https website API.
 
 The value is displayed on a 128x64 OLED display by i2c.
