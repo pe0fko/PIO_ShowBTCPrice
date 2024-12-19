@@ -6,5 +6,5 @@ Also the time is on the display and a graph line of the last 2 hour.
 
 73, pe0fko
 
-https://github.com/pe0fko/PIO_ShowBTCPrice/blob/main/OLED_BTC.png?raw=true
+![BTC Display](https://github.com/pe0fko/PIO_ShowBTCPrice/blob/main/OLED_BTC.png?raw=true)
 
