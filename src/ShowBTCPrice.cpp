@@ -17,6 +17,8 @@
 #include <Wire.h>
 //#include <Adafruit_GFX.h>			// Adafruit GFX Library
 #include <Adafruit_SSD1306.h>		// Adafruit SSD1306 Wemos Mini OLED
+#include <ESPmDNS.h>
+#include <ArduinoOTA.h>
 #include <WiFi_SSID.h>
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -169,7 +171,7 @@ void		displayBTC(int nr);
 void		displayGraph(int nr);
 
 WiFiMulti	wifiMulti;
-
+String		HostName					= "ShowBtc";
 int			graph[128]					= {0};
 int			graphLength					= 0;
 
@@ -229,6 +231,19 @@ void setup()
 	for(uint8_t i = 0; i < WifiApListNumber; i++)
 		wifiMulti.addAP(WifiApList[i].ssid, WifiApList[i].passwd);
 
+	// Start mDNS service
+	if (MDNS.begin(HostName))
+//		MDNS.addService("http", "tcp", 80);
+//	else
+		;	//		PRINT_P("mDNS ERROR!\n");
+
+	// Start OTA server.
+	ArduinoOTA.setHostname((const char *)HostName.c_str());
+//	ArduinoOTA.onStart([]() { ssd1306_printf_P(100, PSTR("OTA update\nRunning")); });
+//	ArduinoOTA.onEnd([]()   { ssd1306_printf_P(100, PSTR("OTA update\nReboot")); ESP.restart(); });
+	ArduinoOTA.setPassword("pe0fko");
+	ArduinoOTA.begin();
+
 	// wait for WiFi connection
 //	Serial.print("Waiting for WiFi to connect...");
 //	while ((wifiMulti.run() != WL_CONNECTED)) {
@@ -257,11 +272,13 @@ void setup()
 
 void loop() 
 {
+	ArduinoOTA.handle();
+
 	if ((wifiMulti.run() != WL_CONNECTED)) {
 		Serial.println(F("WiFI Multi connect."));
-	}
-
-	if (millis() - Access_Timer > Access_Value)
+		delay(200);
+	} 
+	else if (millis() - Access_Timer > Access_Value)
 	{
 		Access_Timer += Access_Value;
 
