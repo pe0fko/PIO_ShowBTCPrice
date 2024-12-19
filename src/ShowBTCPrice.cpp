@@ -1,21 +1,21 @@
-/**
-   BasicHTTPSClient.ino
-
-    Created on: 14.10.2018
-
-*/
+/*
+ * Show BTC Price, from BitVavo
+ *
+ * Created on: 14.10.2018
+ * By: Fred Krom, pe0fko
+ * 
+ */
 
 #include <Arduino.h>
 
 #include <WiFi.h>
 #include <WiFiMulti.h>
-//#include <TZ.h>
+#include <time.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <Wire.h>
-//#include <Adafruit_GFX.h>			// Adafruit GFX Library
 #include <Adafruit_SSD1306.h>		// Adafruit SSD1306 Wemos Mini OLED
 #include <ESPmDNS.h>
 #include <ArduinoOTA.h>
@@ -119,54 +119,13 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
 -----END CERTIFICATE-----
 )CERT";
 
-#elif 1
-
-const char* https_host = "https://ca.ict.nl/4/";
-
-const char rootCACertificate [] PROGMEM = R"CERT(
------BEGIN CERTIFICATE-----
-MIIGEzCCA/ugAwIBAgIQfVtRJrR2uhHbdBYLvFMNpzANBgkqhkiG9w0BAQwFADCB
-iDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0pl
-cnNleSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNV
-BAMTJVVTRVJUcnVzdCBSU0EgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMTgx
-MTAyMDAwMDAwWhcNMzAxMjMxMjM1OTU5WjCBjzELMAkGA1UEBhMCR0IxGzAZBgNV
-BAgTEkdyZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBxMHU2FsZm9yZDEYMBYGA1UE
-ChMPU2VjdGlnbyBMaW1pdGVkMTcwNQYDVQQDEy5TZWN0aWdvIFJTQSBEb21haW4g
-VmFsaWRhdGlvbiBTZWN1cmUgU2VydmVyIENBMIIBIjANBgkqhkiG9w0BAQEFAAOC
-AQ8AMIIBCgKCAQEA1nMz1tc8INAA0hdFuNY+B6I/x0HuMjDJsGz99J/LEpgPLT+N
-TQEMgg8Xf2Iu6bhIefsWg06t1zIlk7cHv7lQP6lMw0Aq6Tn/2YHKHxYyQdqAJrkj
-eocgHuP/IJo8lURvh3UGkEC0MpMWCRAIIz7S3YcPb11RFGoKacVPAXJpz9OTTG0E
-oKMbgn6xmrntxZ7FN3ifmgg0+1YuWMQJDgZkW7w33PGfKGioVrCSo1yfu4iYCBsk
-Haswha6vsC6eep3BwEIc4gLw6uBK0u+QDrTBQBbwb4VCSmT3pDCg/r8uoydajotY
-uK3DGReEY+1vVv2Dy2A0xHS+5p3b4eTlygxfFQIDAQABo4IBbjCCAWowHwYDVR0j
-BBgwFoAUU3m/WqorSs9UgOHYm8Cd8rIDZsswHQYDVR0OBBYEFI2MXsRUrYrhd+mb
-+ZsF4bgBjWHhMA4GA1UdDwEB/wQEAwIBhjASBgNVHRMBAf8ECDAGAQH/AgEAMB0G
-A1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAbBgNVHSAEFDASMAYGBFUdIAAw
-CAYGZ4EMAQIBMFAGA1UdHwRJMEcwRaBDoEGGP2h0dHA6Ly9jcmwudXNlcnRydXN0
-LmNvbS9VU0VSVHJ1c3RSU0FDZXJ0aWZpY2F0aW9uQXV0aG9yaXR5LmNybDB2Bggr
-BgEFBQcBAQRqMGgwPwYIKwYBBQUHMAKGM2h0dHA6Ly9jcnQudXNlcnRydXN0LmNv
-bS9VU0VSVHJ1c3RSU0FBZGRUcnVzdENBLmNydDAlBggrBgEFBQcwAYYZaHR0cDov
-L29jc3AudXNlcnRydXN0LmNvbTANBgkqhkiG9w0BAQwFAAOCAgEAMr9hvQ5Iw0/H
-ukdN+Jx4GQHcEx2Ab/zDcLRSmjEzmldS+zGea6TvVKqJjUAXaPgREHzSyrHxVYbH
-7rM2kYb2OVG/Rr8PoLq0935JxCo2F57kaDl6r5ROVm+yezu/Coa9zcV3HAO4OLGi
-H19+24rcRki2aArPsrW04jTkZ6k4Zgle0rj8nSg6F0AnwnJOKf0hPHzPE/uWLMUx
-RP0T7dWbqWlod3zu4f+k+TY4CFM5ooQ0nBnzvg6s1SQ36yOoeNDT5++SR2RiOSLv
-xvcRviKFxmZEJCaOEDKNyJOuB56DPi/Z+fVGjmO+wea03KbNIaiGCpXZLoUmGv38
-sbZXQm2V0TP2ORQGgkE49Y9Y3IBbpNV9lXj9p5v//cWoaasm56ekBYdbqbe4oyAL
-l6lFhd2zi+WJN44pDfwGF/Y4QA5C5BIG+3vzxhFoYt/jmPQT2BVPi7Fp2RBgvGQq
-6jG35LWjOhSbJuMLe/0CjraZwTiXWTb2qHSihrZe68Zk6s+go/lunrotEbaGmAhY
-LcmsJWTyXnW0OMGuf1pGg+pRyrbxmRE1a6Vqe8YAsOf4vmSyrcjC8azjUeqkk+B5
-yOGBQMkKW+ESPMFgKuOXwIlCypTPRpgSabuY0MLTDXJLR27lk8QyKGOHQ+SwMj4K
-00u/I5sUKUErmgQfky3xxzlIPK1aEn8=
------END CERTIFICATE-----
-)CERT";
-
 #endif
 
-const		uint32_t	Access_Value	= 60UL * 1000;
+const		uint32_t	Access_Value	= 60UL * 1000;	// 1min in ms
 static		uint32_t	Access_Timer	= 0UL;
 
 void		JsonDecode(const char* json);
+void		displayTime();
 void		displayBTC(int nr);
 void		displayGraph(int nr);
 
@@ -174,35 +133,6 @@ WiFiMulti	wifiMulti;
 String		HostName					= "ShowBtc";
 int			graph[128]					= {0};
 int			graphLength					= 0;
-
-
-
-// ./.arduino15/packages/esp8266/hardware/esp8266/3.1.2/cores/esp8266/TZ.h
-//#define TZ_Europe_Amsterdam     PSTR("CET-1CEST,M3.5.0,M10.5.0/3")
-
-// Not sure if WiFiClientSecure checks the validity date of the certificate. 
-// Setting clock just to be sure...
-void setClock() 
-{
-//  configTime(0, 0, "pool.ntp.org");
-	configTime(0, 0, "time.google.com");
-//	configTime(TZ_Europe_Amsterdam, "time.google.com","nl.pool.ntp.org");
-
-	Serial.print(F("Waiting for NTP time sync: "));
-	time_t nowSecs = time(nullptr);
-	while (nowSecs < 8 * 3600 * 2) {
-		delay(500);
-		Serial.print(F("."));
-		yield();
-		nowSecs = time(nullptr);
-	}
-
-	Serial.println();
-	struct tm timeinfo;
-	gmtime_r(&nowSecs, &timeinfo);
-	Serial.print(F("Current time: "));
-	Serial.print(asctime(&timeinfo));
-}
 
 
 void setup() 
@@ -231,34 +161,20 @@ void setup()
 	for(uint8_t i = 0; i < WifiApListNumber; i++)
 		wifiMulti.addAP(WifiApList[i].ssid, WifiApList[i].passwd);
 
+	// Set the timezone for TZ_Europe_Amsterdam
+	configTime(0, 0, "time.google.com");
+	setenv("TZ","CET-1CEST,M3.5.0,M10.5.0/3",1);
+	tzset();
+
 	// Start mDNS service
-	if (MDNS.begin(HostName))
-//		MDNS.addService("http", "tcp", 80);
-//	else
-		;	//		PRINT_P("mDNS ERROR!\n");
+	MDNS.begin(HostName);
 
 	// Start OTA server.
 	ArduinoOTA.setHostname((const char *)HostName.c_str());
-//	ArduinoOTA.onStart([]() { ssd1306_printf_P(100, PSTR("OTA update\nRunning")); });
-//	ArduinoOTA.onEnd([]()   { ssd1306_printf_P(100, PSTR("OTA update\nReboot")); ESP.restart(); });
 	ArduinoOTA.setPassword("pe0fko");
 	ArduinoOTA.begin();
 
-	// wait for WiFi connection
-//	Serial.print("Waiting for WiFi to connect...");
-//	while ((wifiMulti.run() != WL_CONNECTED)) {
-//		Serial.print(".");
-//	}
-//	Serial.println(" connected");
-
-//	setClock();  
-	configTime(0, 0, "time.google.com");
-
-//	time_t now = time(nullptr);			// get UNIX timestamp
-//	Serial.printf("Time: %s\n", ctime(&now));					// convert timestamp and display
-
-	Serial.print("Access host: ");
-	Serial.println(https_host);
+	Serial.printf("Access host: %s", https_host);
 
 	display.clearDisplay();
 	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
@@ -282,72 +198,51 @@ void loop()
 	{
 		Access_Timer += Access_Value;
 
-//		time_t now = time(nullptr);
-//		Serial.printf("Date/Time: %s", ctime(&now));
-
 		WiFiClientSecure *client = new WiFiClientSecure;
 		if(client) 
 		{
 			client->setInsecure();
 //			client->setCACert(rootCACertificate);
 
-	        // Add a scoping block for HTTPClient https to make sure it is destroyed before WiFiClientSecure *client is 
-	        HTTPClient https;
+	        HTTPClient https;	        		// Add a scoping block for HTTPClient https to 
+												// make sure it is destroyed before WiFiClientSecure *client is 
 	    
-//			Serial.print("[HTTPS] begin...\n");
 			if (https.begin(*client, https_host))  // HTTPS
 			{
-//				Serial.print("[HTTPS] GET...\n");
-				// start connection and send HTTP header
-				int httpCode = https.GET();
-	    
-				// httpCode will be negative on error
+				int httpCode = https.GET();		// start connection and send HTTP header
 				if (httpCode > 0) {
-					// HTTP header has been send and Server response header has been handled
-//					Serial.printf("[HTTPS] GET... code: %d\n", httpCode);
-	    
+					// HTTP header has been send and Server response header has been handled	    
 					// file found at server
 					if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) 
 					{
 						String payload = https.getString();
-//						Serial.println(payload);
 						JsonDecode(payload.c_str());
 					}
-				} 
-				else 
-				{
-				Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
+				} else {
+					Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
 				}
 				https.end();
-	        } 
-			else 
-			{
-	          Serial.printf("[HTTPS] Unable to connect\n");
+	        } else {
+				Serial.printf("[HTTPS] Unable to connect\n");
 	        }
 			delete client;
-		} 
-		else 
-		{
-			Serial.println("Unable to create client");
+		} else {
+			Serial.println("Unable to create https client");
 		}
 	}
 }
 
 void JsonDecode(const char* json)
 {
-	// Allocate the JSON document
-	JsonDocument doc;
+	DeserializationError error;
+	JsonDocument doc;						// Allocate the JSON document
 
-	// Deserialize the JSON document
-	DeserializationError error = deserializeJson(doc, json);
-
-	// Test if parsing succeeds
+	error = deserializeJson(doc, json);		// Deserialize the JSON document
 	if (error) {
 		Serial.print(F("deserializeJson() failed: "));
 		Serial.println(error.f_str());
 		return;
 	}
-
 
 /*  {"market":"BTC-EUR","startTimestamp":1707345544376,"timestamp":1707431944376,
     "open":"41029",
@@ -364,6 +259,7 @@ void JsonDecode(const char* json)
     "volumeQuote":"39236728.00683897"}
 */
 
+#if 0
 	int   bk_open     = doc["open"];
 	int   bk_high     = doc["high"];
 	int   bk_low      = doc["low"];
@@ -386,10 +282,30 @@ void JsonDecode(const char* json)
 		);
 
 	bk_last_prev = bk_last;
+#endif
 
-	displayBTC(bk_last);
-	displayGraph(bk_last);
+	display.clearDisplay();
+	display.invertDisplay(false);
+	display.setTextColor(SSD1306_WHITE); // Draw white text
+	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+
+	int btc = doc["last"];
+
+	displayTime();
+	displayBTC(btc);
+	displayGraph(btc);
+
 	display.display();
+}
+
+void displayTime()
+{
+	struct tm timeinfo;
+	time_t now = time(nullptr);
+	localtime_r(&now, &timeinfo);
+
+	display.setCursor(2, 32-8+1);
+	display.printf("%2d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
 }
 
 void displayGraph(int nr)
@@ -413,7 +329,6 @@ void displayGraph(int nr)
 	range = max - min;
 
 	Serial.printf("Range: %d - (%d-%d)\n", range, min, max);
-	display.setTextSize(1);						// 6x8
 	display.setCursor(128-3*6-6-4*6, 32-8+1);
 	display.printf("%4d", range);
 
@@ -429,13 +344,6 @@ void displayGraph(int nr)
 
 void displayBTC(int nr)
 {
-	display.clearDisplay();
-	display.invertDisplay(false);
-	display.setTextColor(SSD1306_WHITE); // Draw white text
-	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
-
-//	display.setCursor(0, 32-8);     // Start at top-left corner
-//	display.print("pe0fko");
 	display.setCursor(128-3*6, 32-8+1);     // Start at top-left corner
 	display.print("BTC");
 
