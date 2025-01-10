@@ -142,7 +142,7 @@ void setup()
 	while(!Serial) ;
 
 	Serial.println("====     Show BTC Price     ====");
-	Serial.println(F("DATE:" __DATE__ " - TIME:" __TIME__));
+	Serial.println(F("Build:" __DATE__ " " __TIME__));
 
 	// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
 	if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
@@ -171,7 +171,7 @@ void setup()
 
 	// Start OTA server.
 	ArduinoOTA.setHostname((const char *)HostName.c_str());
-	ArduinoOTA.setPassword("pe0fko");
+	ArduinoOTA.setPassword(OtaPassword);
 	ArduinoOTA.begin();
 
 	Serial.printf("Access host: %s", https_host);
@@ -180,6 +180,7 @@ void setup()
 	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 	display.setTextColor(SSD1306_WHITE); // Draw white text
 	display.setCursor(0, 4);     // Start at top-left corner
+	display.print(F("URL: "));
 	display.print(https_host);
 	display.display();
 
