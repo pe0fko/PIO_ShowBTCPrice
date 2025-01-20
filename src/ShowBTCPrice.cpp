@@ -20,106 +20,14 @@
 #include <ESPmDNS.h>
 #include <ArduinoOTA.h>
 #include <WiFi_SSID.h>
+#include "certificate.h"			// Root certificate for https definded
 
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+#define SCREEN_WIDTH	128			// OLED display width, in pixels
+#define SCREEN_HEIGHT	32			// OLED display height, in pixels
 
-#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+#define OLED_RESET		-1			// Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS	0x3C		// Address; 0x3D for 128x64, 0x3C for 128x32
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
-
-#if 1
-
-//	client->setInsecure();
-const char* https_host = "https://api.bitvavo.com/v2/ticker/24h?market=BTC-EUR";
-
-#elif 1
-//// echo | openssl s_client -showcerts -servername api.bitvavo.com -connect api.bitvavo.com:443 | openssl x509 -inform pem  -text
-/*
- * Find all the certificate....
- * openssl s_client -showcerts -servername api.bitvavo.com -connect api.bitvavo.com:443
- * openssl x509 -in cert.x509 -text
- *
- *	client->setCACert(rootCACertificate);
- * 
-Certificate:
-    Data:
-        Version: 3 (0x2)
-        Serial Number:
-            b0:57:3e:91:73:97:27:70:db:b4:87:cb:3a:45:2b:38
-        Signature Algorithm: sha256WithRSAEncryption
-        Issuer: C = US, O = Internet Security Research Group, CN = ISRG Root X1
-        Validity
-            Not Before: Mar 13 00:00:00 2024 GMT
-            Not After : Mar 12 23:59:59 2027 GMT
-        Subject: C = US, O = Let's Encrypt, CN = E6
-*/
-
-const char* https_host = "https://api.bitvavo.com/v2/ticker/24h?market=BTC-EUR";
-const char rootCACertificate [] PROGMEM = R"CERT(
------BEGIN CERTIFICATE-----
-MIIEVzCCAj+gAwIBAgIRALBXPpFzlydw27SHyzpFKzgwDQYJKoZIhvcNAQELBQAw
-TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
-cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMjQwMzEzMDAwMDAw
-WhcNMjcwMzEyMjM1OTU5WjAyMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3Mg
-RW5jcnlwdDELMAkGA1UEAxMCRTYwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAATZ8Z5G
-h/ghcWCoJuuj+rnq2h25EqfUJtlRFLFhfHWWvyILOR/VvtEKRqotPEoJhC6+QJVV
-6RlAN2Z17TJOdwRJ+HB7wxjnzvdxEP6sdNgA1O1tHHMWMxCcOrLqbGL0vbijgfgw
-gfUwDgYDVR0PAQH/BAQDAgGGMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQcD
-ATASBgNVHRMBAf8ECDAGAQH/AgEAMB0GA1UdDgQWBBSTJ0aYA6lRaI6Y1sRCSNsj
-v1iU0jAfBgNVHSMEGDAWgBR5tFnme7bl5AFzgAiIyBpY9umbbjAyBggrBgEFBQcB
-AQQmMCQwIgYIKwYBBQUHMAKGFmh0dHA6Ly94MS5pLmxlbmNyLm9yZy8wEwYDVR0g
-BAwwCjAIBgZngQwBAgEwJwYDVR0fBCAwHjAcoBqgGIYWaHR0cDovL3gxLmMubGVu
-Y3Iub3JnLzANBgkqhkiG9w0BAQsFAAOCAgEAfYt7SiA1sgWGCIpunk46r4AExIRc
-MxkKgUhNlrrv1B21hOaXN/5miE+LOTbrcmU/M9yvC6MVY730GNFoL8IhJ8j8vrOL
-pMY22OP6baS1k9YMrtDTlwJHoGby04ThTUeBDksS9RiuHvicZqBedQdIF65pZuhp
-eDcGBcLiYasQr/EO5gxxtLyTmgsHSOVSBcFOn9lgv7LECPq9i7mfH3mpxgrRKSxH
-pOoZ0KXMcB+hHuvlklHntvcI0mMMQ0mhYj6qtMFStkF1RpCG3IPdIwpVCQqu8GV7
-s8ubknRzs+3C/Bm19RFOoiPpDkwvyNfvmQ14XkyqqKK5oZ8zhD32kFRQkxa8uZSu
-h4aTImFxknu39waBxIRXE4jKxlAmQc4QjFZoq1KmQqQg0J/1JF8RlFvJas1VcjLv
-YlvUB2t6npO6oQjB3l+PNf0DpQH7iUx3Wz5AjQCi6L25FjyE06q6BZ/QlmtYdl/8
-ZYao4SRqPEs/6cAiF+Qf5zg2UkaWtDphl1LKMuTNLotvsX99HP69V2faNyegodQ0
-LyTApr/vT01YPE46vNsDLgK+4cL6TrzC/a4WcmF5SRJ938zrv/duJHLXQIku5v0+
-EwOy59Hdm0PT/Er/84dDV0CSjdR/2XuZM3kpysSKLgD1cKiDA+IRguODCxfO9cyY
-Ig46v9mFmBvyH04=
------END CERTIFICATE-----
-)CERT";
-
-
-#elif 1
-/*
-Certificate:
-    Data:
-        Version: 3 (0x2)
-        Serial Number:
-            41:d2:9d:d1:72:ea:ee:a7:80:c1:2c:6c:e9:2f:87:52
-        Signature Algorithm: ecdsa-with-SHA384
-        Issuer: C = US, O = Internet Security Research Group, CN = ISRG Root X2
-        Validity
-            Not Before: Sep  4 00:00:00 2020 GMT
-            Not After : Sep 17 16:00:00 2040 GMT
-        Subject: C = US, O = Internet Security Research Group, CN = ISRG Root X2
-*/
-const char* https_host = "https://api.bitvavo.com/v2/ticker/24h?market=BTC-EUR";
-const char rootCACertificate [] PROGMEM = R"CERT(
------BEGIN CERTIFICATE-----
-MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw
-CQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2gg
-R3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00
-MDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBT
-ZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYw
-EAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW
-+1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9
-ItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0T
-AQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZI
-zj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdW
-tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
-/q4AaOeMSQ+2b1tbFfLn
------END CERTIFICATE-----
-)CERT";
-
-#endif
 
 const		uint32_t	Access_Value	= 60UL * 1000;	// 1min in ms
 static		uint32_t	Access_Timer	= 0UL;
@@ -141,20 +49,21 @@ void setup()
 	Serial.setDebugOutput(true);
 	while(!Serial) ;
 
-	Serial.println("====     Show BTC Price     ====");
-	Serial.println(F("Build:" __DATE__ " " __TIME__));
+	Serial.printf("====     Show BTC Price     ====");
+	Serial.printf("Build:" __DATE__ " " __TIME__);
 
 	// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
 	if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-		Serial.println(F("SSD1306 allocation failed"));
-		for(;;); // Don't proceed, loop forever
+		Serial.printf("SSD1306 display initialize failed....");
+		while(1);
 	}
 
 	display.clearDisplay();
-	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
-	display.setTextColor(SSD1306_WHITE); // Draw white text
-	display.setCursor(0, 4);     // Start at top-left corner
-	display.print(F("WiFi connect"));
+	display.setTextSize(1);					// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+	display.setTextColor(SSD1306_WHITE);	// White text
+	display.setCursor(0, 4);				// top-left corner
+	display.printf("\n== Show BTC Price ==");
+	display.printf("\n== PE0FKO:" __DATE__);
 	display.display();
 
 	WiFi.mode(WIFI_STA);
@@ -170,19 +79,17 @@ void setup()
 	MDNS.begin(HostName);
 
 	// Start OTA server.
-	ArduinoOTA.setHostname((const char *)HostName.c_str());
+	ArduinoOTA.setHostname(static_cast<const char*>(HostName.c_str()));
 	ArduinoOTA.setPassword(OtaPassword);
 	ArduinoOTA.begin();
 
-	Serial.printf("Access host: %s", https_host);
+	delay(2000);
 
 	display.clearDisplay();
-	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
-	display.setTextColor(SSD1306_WHITE); // Draw white text
-	display.setCursor(0, 4);     // Start at top-left corner
-	display.print(F("URL: "));
-	display.print(https_host);
+	display.setCursor(0, 4);
+	display.printf("URL: %s", https_host);
 	display.display();
+	Serial.printf("Access host: %s", https_host);
 
 	Access_Timer = millis() - Access_Value;
 }
@@ -192,7 +99,7 @@ void loop()
 	ArduinoOTA.handle();
 
 	if ((wifiMulti.run() != WL_CONNECTED)) {
-		Serial.println(F("WiFI Multi connect."));
+		Serial.printf("WiFI Multi connect, not connected.");
 		delay(200);
 	} 
 	else if (millis() - Access_Timer > Access_Value)
@@ -228,7 +135,7 @@ void loop()
 	        }
 			delete client;
 		} else {
-			Serial.println("Unable to create https client");
+			Serial.printf("[HTTPS] Unable to create https client");
 		}
 	}
 }
@@ -240,8 +147,7 @@ void JsonDecode(const char* json)
 
 	error = deserializeJson(doc, json);		// Deserialize the JSON document
 	if (error) {
-		Serial.print(F("deserializeJson() failed: "));
-		Serial.println(error.f_str());
+		Serial.printf("deserializeJson() failed: %s\n", error.f_str());
 		return;
 	}
 
@@ -347,7 +253,7 @@ void displayGraph(int nr)
 void displayBTC(int nr)
 {
 	display.setCursor(128-3*6, 32-8+1);     // Start at top-left corner
-	display.print("BTC");
+	display.printf("BTC");
 
 	display.setTextSize(3);      			// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 	display.setCursor(18, 4);				// Start at top-left corner
