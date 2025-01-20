@@ -1,13 +1,18 @@
-/*
- * Show BTC Price, from BitVavo
- *
- * Created on: 14.10.2018
- * By: Fred Krom, pe0fko
- * 
- */
+//=====================================================================
+// Show BTC Price from the BitVavo provider.
+// 2018/10/14 - Fred Krom, pe0fko.
+//
+// V0.1	- Initial version
+//
+// Arduino Tools menu:
+// Board:		ESP-WROOM-32, Wemos D1 R32, and other WSP32
+// Processor:	ESP32 Dev Module
+//
+// Ports used:
+//
+//=====================================================================
 
 #include <Arduino.h>
-
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <time.h>
@@ -31,16 +36,16 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 const		uint32_t	Access_Value	= 60UL * 1000;	// 1min in ms
 static		uint32_t	Access_Timer	= 0UL;
+static		WiFiMulti	wifiMulti;
+static		String		HostName		= "ShowBtc";
+static		int			graph[128]		= {0};
+static		int			graphLength		= 0;
 
+// Forward references
 void		JsonDecode(const char* json);
 void		displayTime();
 void		displayBTC(int nr);
 void		displayGraph(int nr);
-
-WiFiMulti	wifiMulti;
-String		HostName					= "ShowBtc";
-int			graph[128]					= {0};
-int			graphLength					= 0;
 
 
 void setup() 

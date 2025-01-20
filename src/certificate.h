@@ -1,6 +1,10 @@
+//=====================================================================
+// Certificate information
+// 2025/01/20 - Fred Krom, pe0fko.
 //
-// PE0FKO: Certificate information
+// Removed from main file to keep the main file clean.
 //
+//=====================================================================
 
 #if 1
 
