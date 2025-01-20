@@ -49,12 +49,12 @@ void setup()
 	Serial.setDebugOutput(true);
 	while(!Serial) ;
 
-	Serial.printf("====     Show BTC Price     ====");
-	Serial.printf("Build:" __DATE__ " " __TIME__);
+	Serial.printf("====     Show BTC Price     ====\n");
+	Serial.printf("Build: %s %s\n", __DATE__, __TIME__);
 
 	// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
 	if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-		Serial.printf("SSD1306 display initialize failed....");
+		Serial.printf("SSD1306 display initialize failed....\n");
 		while(1);
 	}
 
@@ -89,7 +89,7 @@ void setup()
 	display.setCursor(0, 4);
 	display.printf("URL: %s", https_host);
 	display.display();
-	Serial.printf("Access host: %s", https_host);
+	Serial.printf("Access host: %s\n", https_host);
 
 	Access_Timer = millis() - Access_Value;
 }
@@ -99,7 +99,7 @@ void loop()
 	ArduinoOTA.handle();
 
 	if ((wifiMulti.run() != WL_CONNECTED)) {
-		Serial.printf("WiFI Multi connect, not connected.");
+		Serial.printf("WiFI Multi connect, not connected.\n");
 		delay(200);
 	} 
 	else if (millis() - Access_Timer > Access_Value)
@@ -135,7 +135,7 @@ void loop()
 	        }
 			delete client;
 		} else {
-			Serial.printf("[HTTPS] Unable to create https client");
+			Serial.printf("[HTTPS] Unable to create https client\n");
 		}
 	}
 }
