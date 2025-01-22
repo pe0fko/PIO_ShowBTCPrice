@@ -66,9 +66,9 @@ void setup()
 	display.clearDisplay();
 	display.setTextSize(1);					// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 	display.setTextColor(SSD1306_WHITE);	// White text
-	display.setCursor(0, 4);				// top-left corner
-	display.printf("\n== Show BTC Price ==");
-	display.printf("\n== PE0FKO:" __DATE__);
+
+	display.setCursor(0, 4);	display.printf("== Show BTC Price ==");
+	display.setCursor(0, 16);	display.printf(" PE0FKO:" __DATE__);
 	display.display();
 
 	WiFi.mode(WIFI_STA);
@@ -240,7 +240,7 @@ void displayGraph(int nr)
 	}
 	range = max - min;
 
-	Serial.printf("Range: %d - (%d-%d)\n", range, min, max);
+	Serial.printf("BTC: %d, Range: %d - (%d-%d)\n", nr, range, min, max);
 	display.setTextSize(1);      			// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 	display.setCursor(128-3*6-6-4*6, 32-8+1);
 	display.printf("%4d", range);
