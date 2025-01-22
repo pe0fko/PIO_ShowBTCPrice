@@ -12,19 +12,18 @@
 //
 //=====================================================================
 
-#include <Arduino.h>
-#include <WiFi.h>
-#include <WiFiMulti.h>
-#include <time.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
-#include <ArduinoJson.h>
-#include <SPI.h>
-#include <Wire.h>
+#include <Arduino.h>				// Arduino
+#include <WiFi.h>					// WiFi
+#include <time.h>					// time
+#include <HTTPClient.h>				// HTTPClient
+#include <WiFiClientSecure.h>		// WiFiClientSecure
+#include <ArduinoJson.h>			// ArduinoJson
+#include <SPI.h>					// SPI
+#include <Wire.h>					// I2C
 #include <Adafruit_SSD1306.h>		// Adafruit SSD1306 Wemos Mini OLED
-#include <ESPmDNS.h>
-#include <ArduinoOTA.h>
-#include <WiFi_SSID.h>
+#include <ESPmDNS.h>				// mDNS
+#include <ArduinoOTA.h>				// OTA
+#include <WiFi_SSID.h>				// WiFi SSID and password
 #include "certificate.h"			// Root certificate for https definded
 
 #define SCREEN_WIDTH	128			// OLED display width, in pixels
@@ -67,15 +66,14 @@ void setup()
 	display.setTextSize(1);					// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 	display.setTextColor(SSD1306_WHITE);	// White text
 	display.invertDisplay(false);
-//	display.invertDisplay(true);
-
 	display.setCursor(0, 4);	display.printf("== Show BTC Price ==");
 	display.setCursor(0, 16);	display.printf(" PE0FKO:" __DATE__);
 	display.display();
+	delay(2000);
 
 	WiFi.mode(WIFI_STA);
 	for(uint8_t i = 0; i < WifiApListNumber; i++)
-		wifiMulti.addAP(WifiApList[i].ssid, WifiApList[i].passwd);
+		wifiMulti.addAP(WifiApList[i].ssid, WifiApList[i].passphrase);
 
 	// Set the timezone for TZ_Europe_Amsterdam
 	configTime(0, 0, "time.google.com");
@@ -89,8 +87,6 @@ void setup()
 	ArduinoOTA.setHostname(static_cast<const char*>(HostName.c_str()));
 	ArduinoOTA.setPassword(OtaPassword);
 	ArduinoOTA.begin();
-
-	delay(2000);
 
 	display.clearDisplay();
 	display.setCursor(0, 4);
