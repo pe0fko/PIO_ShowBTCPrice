@@ -66,6 +66,8 @@ void setup()
 	display.clearDisplay();
 	display.setTextSize(1);					// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 	display.setTextColor(SSD1306_WHITE);	// White text
+	display.invertDisplay(false);
+//	display.invertDisplay(true);
 
 	display.setCursor(0, 4);	display.printf("== Show BTC Price ==");
 	display.setCursor(0, 16);	display.printf(" PE0FKO:" __DATE__);
@@ -99,17 +101,33 @@ void setup()
 	Access_Timer = millis() - Access_Value;
 }
 
+
+void ErrorMsg(int ms, const char line[])
+{
+	display.invertDisplay(true);
+	display.clearDisplay();
+	display.setTextSize(1);					// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+	display.setCursor(0, 8);
+	display.print(line);
+	display.display();
+
+	delay(ms);
+	display.invertDisplay(false);
+}
+
 void loop() 
 {
 	ArduinoOTA.handle();
 
 	if ((wifiMulti.run() != WL_CONNECTED)) {
-		Serial.printf("WiFI Multi connect, not connected.\n");
-		delay(200);
+		Serial.printf("Error: WiFI Multi connect, not connected.\n");
+		ErrorMsg(1000, "E: Connect WiFi");
 	} 
 	else if (millis() - Access_Timer > Access_Value)
 	{
 		Access_Timer += Access_Value;
+
+//		ErrorMsg(500," = TESTING =");
 
 		WiFiClientSecure *client = new WiFiClientSecure;
 		if(client) 
@@ -133,14 +151,17 @@ void loop()
 					}
 				} else {
 					Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
+					ErrorMsg(1000, "E: HTTPS GET");
 				}
 				https.end();
 	        } else {
 				Serial.printf("[HTTPS] Unable to connect\n");
+				ErrorMsg(1000, "E: HTTPS connect");
 	        }
 			delete client;
 		} else {
 			Serial.printf("[HTTPS] Unable to create https client\n");
+			ErrorMsg(1000, "E: HTTPS client");
 		}
 	}
 }
@@ -153,6 +174,7 @@ void JsonDecode(const char* json)
 	error = deserializeJson(doc, json);		// Deserialize the JSON document
 	if (error) {
 		Serial.printf("deserializeJson() failed: %s\n", error.f_str());
+		ErrorMsg(1000, "E: JSON");
 		return;
 	}
 
@@ -196,12 +218,11 @@ void JsonDecode(const char* json)
 	bk_last_prev = bk_last;
 #endif
 
-	display.clearDisplay();
-	display.invertDisplay(false);
-	display.setTextColor(SSD1306_WHITE); // Draw white text
-	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
-
 	int btc = doc["last"];
+
+	display.clearDisplay();
+//	display.setTextColor(SSD1306_WHITE); // Draw white text
+//	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 
 	displayTime();
 	displayBTC(btc);
@@ -216,6 +237,7 @@ void displayTime()
 	time_t now = time(nullptr);
 	localtime_r(&now, &timeinfo);
 
+	display.setTextSize(1);      // text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 	display.setCursor(2, 32-8+1);
 	display.printf("%2d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
 }
