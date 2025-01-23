@@ -35,6 +35,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 const		uint32_t	Access_Value	= 60UL * 1000;	// 1min in ms
 static		uint32_t	Access_Timer	= 0UL;
+static		uint32_t	Process_Timer	= 0UL;
 static		WiFiMulti	wifiMulti;
 static		String		HostName		= "ShowBtc";
 static		int			graph[128]		= {0};
@@ -111,6 +112,7 @@ void ErrorMsg(int ms, const char line[])
 	display.invertDisplay(false);
 }
 
+
 void loop() 
 {
 	ArduinoOTA.handle();
@@ -123,13 +125,12 @@ void loop()
 	{
 		Access_Timer += Access_Value;
 
-//		ErrorMsg(500," = TESTING =");
+		Process_Timer = millis();
 
 		WiFiClientSecure *client = new WiFiClientSecure;
 		if(client) 
 		{
-			client->setInsecure();
-//			client->setCACert(rootCACertificate);
+			SET_ROOT_CERTIFICATE_CACERT;		// Set the root certificate or setInsecure!
 
 	        HTTPClient https;	        		// Add a scoping block for HTTPClient https to 
 												// make sure it is destroyed before WiFiClientSecure *client is 
@@ -137,7 +138,8 @@ void loop()
 			if (https.begin(*client, https_host))  // HTTPS
 			{
 				int httpCode = https.GET();		// start connection and send HTTP header
-				if (httpCode > 0) {
+				if (httpCode > 0) 
+				{
 					// HTTP header has been send and Server response header has been handled	    
 					// file found at server
 					if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) 
@@ -150,15 +152,22 @@ void loop()
 					ErrorMsg(1000, "E: HTTPS GET");
 				}
 				https.end();
-	        } else {
+			}
+			else 
+			{
 				Serial.printf("[HTTPS] Unable to connect\n");
 				ErrorMsg(1000, "E: HTTPS connect");
 	        }
 			delete client;
-		} else {
+		} 
+		else 
+		{
 			Serial.printf("[HTTPS] Unable to create https client\n");
 			ErrorMsg(1000, "E: HTTPS client");
 		}
+
+		Process_Timer -= millis();
+		Serial.printf("Process time: %d ms\n", -Process_Timer);
 	}
 }
 
