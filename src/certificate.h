@@ -12,7 +12,6 @@
 
 const char* https_host = "https://api.bitvavo.com/v2/ticker/24h?market=BTC-EUR";
 
-
 #else
 
 #define  SET_ROOT_CERTIFICATE_CACERT	client->setCACert(rootCACertificate)
@@ -25,7 +24,7 @@ const char* https_host = "https://api.bitvavo.com/v2/ticker/24h?market=BTC-EUR";
 //const char cert_ISRG_X1 [] PROGMEM = R"CERT(
 //const char cert_ISRG_X2 [] PROGMEM = R"CERT(
 
-// Create a certificate bundle for the root certificates.
+// Create a certificate bundle for the two root certificates.
 const char rootCACertificate [] PROGMEM = R"CERT(
 -----BEGIN CERTIFICATE-----
 MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
