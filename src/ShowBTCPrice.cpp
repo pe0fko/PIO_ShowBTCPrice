@@ -63,7 +63,7 @@ void setup()
 {
 	Serial.begin(115200);
 	Serial.setDebugOutput(true);
-//	while(!Serial) ;
+	while(!Serial) ;
 
 #if 1
 	Serial.printf("=== PE0FKO: Show BTC Price\n");
