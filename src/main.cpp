@@ -24,7 +24,7 @@
 #define	USAGE_SLEEP_SEC				10		// Debug sleep time
 
 #define GRAPH_STEP			1		// Number of steps in the graphDataPionts
-#define	DEBUG
+//#define	DEBUG
 
 #include <Arduino.h>				// Arduino
 #include <WiFi.h>					// WiFi
