@@ -23,8 +23,8 @@
 //#define	USAGE_SLEEP_SEC				60		// Sleep time for 1 minute
 #define	USAGE_SLEEP_SEC				10		// Debug sleep time
 
-#define GRAPH_STEP			4		// Number of steps in the graphDataPionts
-//#define	DEBUG
+#define GRAPH_STEP			1		// Number of steps in the graphDataPionts
+#define	DEBUG
 
 #include <Arduino.h>				// Arduino
 #include <WiFi.h>					// WiFi
@@ -36,8 +36,8 @@
 #include <SPI.h>					// SPI
 #include <Wire.h>					// I2C
 #include <Adafruit_SSD1306.h>		// Adafruit SSD1306 Wemos Mini OLED
-#include <ESPmDNS.h>				// mDNS
-#include <ArduinoOTA.h>				// OTA
+//#include <ESPmDNS.h>				// mDNS
+#include <ArduinoOTA.h>				// OTA + mDNS
 #include <WiFi_SSID.h>				// WiFi SSID and password
 #include "certificate.h"			// Root certificate for https definded
 
@@ -69,8 +69,8 @@ bool		get_https(const char *https_host, String &payload);
 void		JsonDecode(const char* json);
 void		displayInit();
 void		displayTime();
-void		displayBTC(int nr);
-void		displayGraph(int nr);
+void		displayBTC(int nr, int y0);
+void		displayGraph(int nr, int x0, int y0, int w0, int h0);
 void		displayMessage(int ms, const char line[]);
 void		print_wakeup_reason();
 
@@ -82,36 +82,26 @@ void		print_wakeup_reason();
 
 void setup() 
 {
+	Wire.begin(5, 4);		// SDA, SCL, Wemos LOLIN32 oLED
+
 	bootCount += 1;			// Keep track of the number of boots
 
 	Serial.begin(115200);
 	Serial.setDebugOutput(true);
 	while(!Serial) ;
 
-	Wire.begin(5, 4);		// SDA, SCL, Wemos LOLIN32 oLED
-
 	Serial.printf("=== PE0FKO: Show BTC Price\n");
 	Serial.printf("=== Build: %s %s\n", __DATE__, __TIME__);
-//	Serial.printf("=== Boot : %d times\n", bootCount);
 	if (bootCount == 1) 
 	{
 		Serial.printf("=== First boot, clear RTC memory\n");
-		memset(graphDataPionts, 0, sizeof(graphDataPionts));
-		graphUsedLength = 0;
+//		memset(graphDataPionts, 0, sizeof(graphDataPionts));
+//		graphUsedLength = 0;
 		displayInit();		
-	}
+	} else
+		Serial.printf("=== Boot %d times\n", bootCount);
 
 #ifdef DEBUG
-	WiFi.onEvent(
-		[](WiFiEvent_t event, WiFiEventInfo_t info) 
-		{
-			Serial.printf("WiFi IPv6: %s Strange....\n",
-				IPv6Address(info.got_ip6.ip6_info.ip.addr).toString().c_str()
-				);
-		}
-		, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP6
-	);
-
 	WiFi.onEvent(
 		[](WiFiEvent_t event, WiFiEventInfo_t info) 
 		{
@@ -177,22 +167,14 @@ void setup()
 	);
 
 //	Serial.printf("=== WiFi mode STA\n");
-//	Serial.flush();
 	WiFi.disconnect(true);						// Disconnect WiFi persistent WiFi
 	WiFi.mode(WIFI_STA);
 
 //	Serial.printf("=== Add APs\n");
-//	Serial.flush();
 	for(int i = 0; i < WifiApListNumber; i++)
 		wifiMulti.addAP(WifiApList[i].ssid, WifiApList[i].passphrase);
 
-	// Start mDNS service
-//	Serial.printf("=== mDNS hostname %s.local\n", HostName.c_str());
-//	Serial.flush();
-	MDNS.begin(HostName);
-
-	// Start OTA server.
-//	ArduinoOTA.setHostname(static_cast<const char*>(HostName.c_str()));
+	// Start OTA & mDNS server.
 	ArduinoOTA.setHostname(HostName.c_str());
 	ArduinoOTA.setPassword(OtaPassword);
 	ArduinoOTA.begin();
@@ -222,7 +204,7 @@ void loop()
 	else
 	if (ntp_time_sync == false)				// Wait for NTP time sync
 	{
-#if 0
+#if 1
 		/* Wait untill the sNTP is completed and the correct time
 		 * is received. De message is only shown after 4 seconds
 		 * with a 1 second interval.
@@ -300,8 +282,8 @@ bool get_https(const char *https_host, String &payload)
 				{
 					payload = https.getString();
 #ifdef DEBUG
-					Serial.printf("[HTTPS] GET: %s\n", payload.c_str());
-					Serial.flush();
+//					Serial.printf("[HTTPS] GET: %s\n", payload.c_str());
+//					Serial.flush();
 #endif
 					ret = true;
 				}
@@ -381,23 +363,30 @@ void JsonDecode(const char* json)
 #endif
 
 	int btc = doc["last"];
+	Serial.printf("Value BTC is %d euro.\n", btc);
 
 	displayInit();
 
 	display.setTextColor(SSD1306_WHITE);	// White text
 	display.clearDisplay();
 
-	display.setCursor(SCREEN_WIDTH-4*6, SCREEN_HEIGHT-2*8);     // Start at top-left corner
-	display.printf("BTC");
-	display.setCursor(SCREEN_WIDTH-4*6, SCREEN_HEIGHT-1*8);     // Start at top-left corner
-	display.printf("Live");
+	// "BTC-Live"
+	display.setCursor(SCREEN_WIDTH-8*6, SCREEN_HEIGHT-8);		// Text RB
+	display.printf("BTC-Live");
 
-	display.setCursor(66, SCREEN_HEIGHT-2*8);
-	display.printf("{%d}", bootCount);
+#ifdef DEBUG
+	display.setCursor(40, SCREEN_HEIGHT-2*8);
+	display.printf("%d", bootCount);
+#endif
+
+	// Draw the boxes
+	display.drawRect(0,  0, display.width(), display.height()-9     , WHITE);
+	display.drawRect(0, 24, display.width(), display.height()-24-9, WHITE);
+
 
 	displayTime();
-	displayBTC(btc);
-	displayGraph(btc);
+	displayBTC(btc, 2);
+	displayGraph(btc, 1, 23, display.width()-2, display.height() - 24 - 9);
 
 	display.display();
 }
@@ -406,15 +395,11 @@ void displayTime()
 {
 	struct tm timeinfo;
 	getLocalTime(&timeinfo);
-
-//	display.setTextSize(2);      			// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
-//	display.setCursor(4, SCREEN_HEIGHT-16+2);
-	display.setCursor(4, SCREEN_HEIGHT-8+1);
+	display.setCursor(0, SCREEN_HEIGHT-8+1);
 	display.print(&timeinfo, "%H:%M");
-//	display.setTextSize(1);
 }
 
-void displayGraph(int nr)
+void displayGraph(int nr, int x0, int y0, int w0, int h0)
 {
 	const int graphArrayLength = sizeof(graphDataPionts) / sizeof(graphDataPionts[0]);
 
@@ -437,62 +422,51 @@ void displayGraph(int nr)
 		if (graphDataPionts[i] < min) min = graphDataPionts[i];
 	}
 	int range = max - min + 1;
+//	Serial.printf("BLOCK: range=%d min=%d max=%d\n", range, min, max);
 
-//	display.setTextSize(1);      			// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
-//	display.setCursor(128-3*6-6-4*6, 32-8+1);
-//	display.printf("%4d", range);
-
-	display.setCursor(66, SCREEN_HEIGHT-1*8);
+	display.setCursor(7*6, SCREEN_HEIGHT-8);
 	display.printf("[%d]", range);
 
-	Serial.printf("BTC: %d, Range: %d - (min=%d - max=%d)\n", nr, range, min, max);
-
-#if 1
+//	Serial.printf("BTC: %d, Range: %d - (min=%d - max=%d)\n", nr, range, min, max);
+//	Serial.printf("BLOCK: x0=%d y0=%d w0=%d h0=%d\n", x0, y0, w0, h0);
 
 	for (int i = 0; i < graphUsedLength; i += 1) 
 	{
-		int y = graphDataPionts[i] - min;			// y = 0..range
-		y = y * SCREEN_HEIGHT / range;	// y = 0..SCREEN_HEIGHT
-		y = SCREEN_HEIGHT - y - 1;		// y = SCREEN_HEIGHT..0
+		int x = x0 + i * w0 / graphArrayLength;
+		int y = graphDataPionts[i] - min - 1;		// y = 0..range
+		y = y * h0 / range;							// y = 0..h0
+		y = (y0+h0) - y;
 
-		int x = i * SCREEN_WIDTH / graphArrayLength;
 //		Serial.printf("PIXEL%03d x=%d y=%d\n", i, x, y);
-
-		display.drawPixel(x, y, SSD1306_INVERSE);
-//		display.drawPixel(x, y, SSD1306_WHITE);
+		display.drawPixel(x, y, SSD1306_WHITE);
 	}
-
-#else
-	for (int i = 0; i < graphUsedLength; i++) {
-		int n = graphDataPionts[i];
-		n -= min;
-		n *= 31;
-		n /= range;
-		if (range == 0) n = 0;
-		display.drawPixel(i * SCREEN_WIDTH / graphArrayLength, 31-n, SSD1306_INVERSE);
-	}
-#endif
 }
 
-void displayBTC(int nr)
+void displayBTC(int nr, int y0)
 {
-	display.setTextSize(3);      			// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+	// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+	display.setTextSize( 3 );
 
-	if (nr >= 1000) {
-		display.setCursor(8, 0);
-		display.printf("%3d", nr / 1000);
-		// Draw dot
-		int x = display.getCursorX();
-		display.drawFastHLine(x, 0+24-5-2, 3, SSD1306_WHITE);
-		display.drawFastHLine(x, 0+24-4-2, 3, SSD1306_WHITE);
-		display.drawFastHLine(x, 0+24-3-2, 3, SSD1306_WHITE);
+	int t = 18;
+	int w1 = nr >= 1000000 ? 4*t : nr >= 100000 ? 3*t : nr >= 10000 ? 2*t : nr >= 1000 ? 1*t : 0*t;
+	int w2 = 6;
+	int w3 = 3*t;
+//	const int y  = 0;
 
-		display.setCursor(x+6, 0);
-		display.printf("%03d", nr % 1000);
-	} else {
-		display.setCursor(16+3*18+6, 0);
-		display.printf("%3d", nr);
-	}
+	int x = (display.width() - (w1 + w2 + w3)) / 2;
+	if (x < 0) x = 0;
+	display.setCursor(x, y0);
+	display.printf("%d", nr / 1000);
+
+	// Draw dot
+	x += w1;
+	display.drawFastHLine(x, y0+24-5-2, 3, SSD1306_WHITE);
+	display.drawFastHLine(x, y0+24-4-2, 3, SSD1306_WHITE);
+	display.drawFastHLine(x, y0+24-3-2, 3, SSD1306_WHITE);
+
+	x += w2;
+	display.setCursor(x, y0);
+	display.printf("%03d", nr % 1000);
 
 	display.setTextSize(1);
 }
@@ -511,23 +485,17 @@ void displayInit()
 			while(1);
 		}
 
-//		display.clearDisplay();
-//		display.invertDisplay(false);
 		if (bootCount == 1)
 		{
 			display.setTextColor(SSD1306_WHITE);	// White text
 			display.setTextSize(1);					// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 			display.clearDisplay();
 			display.setCursor(0, 1*8);	display.printf("== Show BTC Price ==");
-			display.setCursor(0, 3*8);	display.printf(" PE0FKO:" __DATE__);
+			display.setCursor(0, 2*8);	display.printf(" PE0FKO:" __DATE__);
+			display.setCursor(0, 4*8);	display.printf(" API-URL:\n%s", https_host);
 			display.display();
 			delay(2000);
-			display.clearDisplay();
-			display.setCursor(0, 4);	display.printf(" API-URL:\n%s", https_host);
-			display.display();
-//			delay(2000);
 		}
-//		display.clearDisplay();
 	}
 }
 
@@ -540,14 +508,9 @@ void displayMessage(int ms, const char line[])
 	Message_Timer = millis();
 	Message_Value = ms;
 
-//	display.invertDisplay(true);
-
 	display.setTextColor(SSD1306_WHITE);	// White text
 	display.clearDisplay();
-//	display.setTextSize(1);					// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 	display.setCursor(0, 2*8);
 	display.print(line);
 	display.display();
-
-//	display.invertDisplay(false);
 }
