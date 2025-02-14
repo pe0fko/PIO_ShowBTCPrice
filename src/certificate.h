@@ -8,13 +8,13 @@
 
 #if 0
 
-#define  SET_ROOT_CERTIFICATE_CACERT	client->setInsecure()
+#define  SET_ROOT_CERTIFICATE_CACERT(c)	c->setInsecure()
 
 const char* https_host = "https://api.bitvavo.com/v2/ticker/24h?market=BTC-EUR";
 
 #else
 
-#define  SET_ROOT_CERTIFICATE_CACERT	client->setCACert(rootCACertificate)
+#define  SET_ROOT_CERTIFICATE_CACERT(c)	c->setCACert(rootCACertificate)
 
 // HTTPS cert of api.bitvavo.com is signed by Letsencrypt.org certificate.
 const char* https_host = "https://api.bitvavo.com/v2/ticker/24h?market=BTC-EUR";

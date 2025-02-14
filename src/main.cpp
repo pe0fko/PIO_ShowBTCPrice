@@ -1,0 +1,553 @@
+//=====================================================================
+// Show BTC Price from the BitVavo provider.
+// 2018/10/14 - Fred Krom, pe0fko.
+//
+// V0.1	- Initial version
+// V1.0	- LOLIN32 OLED version, 128x64 OLED display
+//
+// Arduino Tools menu:
+// Board:		ESP-WROOM-32, Wemos LOLIN32 OLED, and other WSP32
+// Processor:	ESP32 Dev Module
+//
+// Ports used:
+//
+//=====================================================================
+
+
+#define BOOT_TIME_FOR_DEEP_SLEEP	6500	// Ms Boot time when deep sleep is enabled
+#define USAGE_DEEP_SLEEP_SEC		60		// Deep sleep time in seconds
+//#define	USAGE_DEEP_SLEEP_SEC		0		// No Deep sleep
+//#define	USAGE_DEEP_SLEEP_SEC		20		// Deep sleep debug time DEBUG
+//#define USAGE_DEBUG_JSON						// Debug JSON data
+
+//#define	USAGE_SLEEP_SEC				60		// Sleep time for 1 minute
+#define	USAGE_SLEEP_SEC				10		// Debug sleep time
+
+#define GRAPH_STEP			4		// Number of steps in the graphDataPionts
+//#define	DEBUG
+
+#include <Arduino.h>				// Arduino
+#include <WiFi.h>					// WiFi
+#include <time.h>					// time
+#include <esp_sntp.h>				// sNTP
+#include <HTTPClient.h>				// HTTPClient
+#include <WiFiClientSecure.h>		// WiFiClientSecure
+#include <ArduinoJson.h>			// ArduinoJson
+#include <SPI.h>					// SPI
+#include <Wire.h>					// I2C
+#include <Adafruit_SSD1306.h>		// Adafruit SSD1306 Wemos Mini OLED
+#include <ESPmDNS.h>				// mDNS
+#include <ArduinoOTA.h>				// OTA
+#include <WiFi_SSID.h>				// WiFi SSID and password
+#include "certificate.h"			// Root certificate for https definded
+
+#define SCREEN_WIDTH	128			// OLED display width, in pixels
+#define SCREEN_HEIGHT	64			// OLED display height, in pixels
+#define OLED_RESET		-1			// Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS	0x3C		// Address; 0x3D for 128x64, 0x3C for 128x32
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+const		uint32_t	GetHttps_Value	= USAGE_SLEEP_SEC * 1000;	// 1min in ms
+static		uint32_t	GetHttps_Timer	= 0UL;
+
+static		uint32_t	Message_Value	= 0U;
+static		uint32_t	Message_Timer	= 0UL;
+
+//static		uint32_t	Process_Timer	= 0UL;
+static		WiFiMulti	wifiMulti;
+static		String		HostName		= "ShowBtc";
+volatile	bool		ntp_time_sync	= false;
+
+// RTC_DATA_ATTR, 8Kb of RTC memory
+RTC_DATA_ATTR	int		graphDataPionts[SCREEN_WIDTH * GRAPH_STEP];
+RTC_DATA_ATTR	int		graphUsedLength;
+RTC_DATA_ATTR	int		bootCount;
+
+// Forward references
+bool		get_https(const char *https_host, String &payload);
+void		JsonDecode(const char* json);
+void		displayInit();
+void		displayTime();
+void		displayBTC(int nr);
+void		displayGraph(int nr);
+void		displayMessage(int ms, const char line[]);
+void		print_wakeup_reason();
+
+
+#include "sdkconfig.h"
+#if CONFIG_ESP_WIFI_REMOTE_ENABLED
+#error "WPS is only supported in SoCs with native Wi-Fi support"
+#endif
+
+void setup() 
+{
+	bootCount += 1;			// Keep track of the number of boots
+
+	Serial.begin(115200);
+	Serial.setDebugOutput(true);
+	while(!Serial) ;
+
+	Wire.begin(5, 4);		// SDA, SCL, Wemos LOLIN32 oLED
+
+	Serial.printf("=== PE0FKO: Show BTC Price\n");
+	Serial.printf("=== Build: %s %s\n", __DATE__, __TIME__);
+//	Serial.printf("=== Boot : %d times\n", bootCount);
+	if (bootCount == 1) 
+	{
+		Serial.printf("=== First boot, clear RTC memory\n");
+		memset(graphDataPionts, 0, sizeof(graphDataPionts));
+		graphUsedLength = 0;
+		displayInit();		
+	}
+
+#ifdef DEBUG
+	WiFi.onEvent(
+		[](WiFiEvent_t event, WiFiEventInfo_t info) 
+		{
+			Serial.printf("WiFi IPv6: %s Strange....\n",
+				IPv6Address(info.got_ip6.ip6_info.ip.addr).toString().c_str()
+				);
+		}
+		, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP6
+	);
+
+	WiFi.onEvent(
+		[](WiFiEvent_t event, WiFiEventInfo_t info) 
+		{
+			Serial.printf("WiFi connected, ssid: %-.32s, channel: %d, authmode: %d\n",
+				info.wifi_sta_connected.ssid,
+				info.wifi_sta_connected.channel,
+				info.wifi_sta_connected.authmode
+				);
+		}
+		, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED
+	);
+#endif
+
+	// set time sync notification call-back function
+	sntp_set_time_sync_notification_cb(
+		[](struct timeval *t)
+		{
+			ntp_time_sync = true;
+#ifdef DEBUG
+			struct tm timeinfo;
+			getLocalTime(&timeinfo);
+			Serial.println(&timeinfo, "sNTP: %A, %B %d %Y %H:%M:%S zone %Z %z ");
+			Serial.printf("sNTP sync interval: %d sec\n", sntp_get_sync_interval() / 1000 );
+#endif
+		}
+	);
+
+	// Trigger sNTP on the event of WiFi connected
+	WiFi.onEvent(
+		[](WiFiEvent_t event, WiFiEventInfo_t info) 
+		{
+#ifdef DEBUG
+			Serial.printf("WiFi IP: %s, GW: %s, NM: %s\n", 
+				IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(),
+				IPAddress(info.got_ip.ip_info.gw.addr).toString().c_str(),
+				IPAddress(info.got_ip.ip_info.netmask.addr).toString().c_str()
+				);
+#endif
+			// Set the timezone for TZ_Europe_Amsterdam, CET-1CEST,M3.5.0,M10.5.0/3
+			configTime(0, 0, "time.google.com", "pool.ntp.org" );
+			setenv("TZ","CET-1CEST,M3.5.0,M10.5.0/3",1);	tzset();	// After the configTime!
+			sntp_set_sync_interval(60 * 60 * 1000);						// 1 hour
+			esp_sntp_init();											// Start sNTP
+		}
+		, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP
+	);
+
+	// Trigger sNTP on the event of WiFi disconnected
+	WiFi.onEvent(
+		[](WiFiEvent_t event, WiFiEventInfo_t info) 
+		{
+#ifdef DEBUG
+			Serial.printf("WiFi disconnected, ssid: %-.32s, reason: %d, rssi: %d\n",
+				info.wifi_sta_disconnected.ssid,
+				info.wifi_sta_disconnected.reason,
+				info.wifi_sta_disconnected.rssi
+				);
+#endif
+			esp_sntp_stop();								// Stop sNTP
+			ntp_time_sync = false;
+		}
+		, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED
+	);
+
+//	Serial.printf("=== WiFi mode STA\n");
+//	Serial.flush();
+	WiFi.disconnect(true);						// Disconnect WiFi persistent WiFi
+	WiFi.mode(WIFI_STA);
+
+//	Serial.printf("=== Add APs\n");
+//	Serial.flush();
+	for(int i = 0; i < WifiApListNumber; i++)
+		wifiMulti.addAP(WifiApList[i].ssid, WifiApList[i].passphrase);
+
+	// Start mDNS service
+//	Serial.printf("=== mDNS hostname %s.local\n", HostName.c_str());
+//	Serial.flush();
+	MDNS.begin(HostName);
+
+	// Start OTA server.
+//	ArduinoOTA.setHostname(static_cast<const char*>(HostName.c_str()));
+	ArduinoOTA.setHostname(HostName.c_str());
+	ArduinoOTA.setPassword(OtaPassword);
+	ArduinoOTA.begin();
+
+	GetHttps_Timer = millis() - GetHttps_Value;
+
+	Serial.printf("=== Exit the setup()\n");
+	Serial.flush();
+}
+
+void loop() 
+{
+	bool enter_deep_sleep = false;
+
+	ArduinoOTA.handle();
+
+	if (Message_Value != 0 && ((millis() - Message_Timer) >= Message_Value))	// Clear message after time
+	{
+		Message_Value = 0;
+	}
+	else
+	if ((wifiMulti.run(5000) != WL_CONNECTED)) 
+	{
+		Serial.printf("Error: WiFI Multi connect, not connected.\n");
+		displayMessage(1000, "WiFi Connect");
+	}
+	else
+	if (ntp_time_sync == false)				// Wait for NTP time sync
+	{
+#if 0
+		/* Wait untill the sNTP is completed and the correct time
+		 * is received. De message is only shown after 4 seconds
+		 * with a 1 second interval.
+		 */
+		static int ntp_wait = 0;			// Dont show every time
+
+		if (Message_Value == 0) 
+		{
+			if (ntp_wait++ == 5)
+			{
+				displayMessage(1000, "Wait sNTP");
+				ntp_wait = 0;
+			}
+			else
+			{
+				Message_Timer = millis();
+				Message_Value = 1000;
+			}
+		}
+#endif
+	}
+	else
+	if (millis() - GetHttps_Timer > GetHttps_Value)
+	{
+		GetHttps_Timer = millis();
+
+//		Process_Timer = millis();
+//		Process_Timer -= millis();
+//		Serial.printf("Process time: %d ms\n", -Process_Timer);
+
+		String payload;
+		if (get_https(https_host, payload))				// Get the API for the BTC price
+		{
+#if USAGE_DEEP_SLEEP_SEC > 0
+			esp_sntp_stop();							// Stop sNTP
+			delay(10);									// Wait for the sNTP to stop
+			WiFi.disconnect(true);						// Disconnect WiFi for clean restart
+			delay(10);									// Wait for the WiFi to disconnect
+
+			JsonDecode(payload.c_str());				// Decode the JSON data, the BTC price, and display it
+
+			Serial.println("Deep sleep enter.......");
+			Serial.flush(); 
+
+			esp_sleep_enable_timer_wakeup				// 1 minute in microseconds
+			(	(USAGE_DEEP_SLEEP_SEC) * 1000000		// in Sec
+			-	(BOOT_TIME_FOR_DEEP_SLEEP) * 1000		// in Ms
+			);
+			esp_deep_sleep_start();
+#else
+			Serial.println("Deep sleep not enabled");
+			JsonDecode(payload.c_str());				// Decode the JSON data, the BTC price, and display it
+#endif
+		}
+	}
+}
+
+bool get_https(const char *https_host, String &payload)
+{
+	WiFiClientSecure*	client;
+	HTTPClient			https;
+	bool				ret = false;
+
+	if ((client = new WiFiClientSecure) != NULL)
+	{
+		SET_ROOT_CERTIFICATE_CACERT(client);			// Set the root certificate or setInsecure!    
+		if (https.begin(*client, https_host))			// HTTPS
+		{
+			int httpCode = https.GET();		// start connection and send HTTP header
+			if (httpCode > 0) 
+			{
+				// HTTP header has been send and Server response header has been handled	    
+				// file found at server
+				if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) 
+				{
+					payload = https.getString();
+#ifdef DEBUG
+					Serial.printf("[HTTPS] GET: %s\n", payload.c_str());
+					Serial.flush();
+#endif
+					ret = true;
+				}
+			} else {
+				Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
+				displayMessage(1000, "E: HTTPS GET");
+			}
+			https.end();
+		}
+		else 
+		{
+			Serial.printf("[HTTPS] Unable to connect\n");
+			displayMessage(1000, "E: HTTPS connect");
+			https.end();
+        }
+		delete client;
+	} 
+	else 
+	{
+		Serial.printf("[HTTPS] Unable to create https client\n");
+		displayMessage(1000, "E: HTTPS client");
+	}
+
+	return ret;
+}
+
+void JsonDecode(const char* json)
+{
+	DeserializationError error;
+	JsonDocument doc;						// Allocate the JSON document
+
+	error = deserializeJson(doc, json);		// Deserialize the JSON document
+	if (error) {
+		Serial.printf("deserializeJson() failed: %s\n", error.f_str());
+		displayMessage(1000, "E: JSON");
+		return;
+	}
+
+/*  {"market":"BTC-EUR","startTimestamp":1707345544376,"timestamp":1707431944376,
+    "open":"41029",
+    "openTimestamp":1707345556907,
+    "high":"42249",
+    "low":"4.089E+4",
+    "last":"41945",
+    "closeTimestamp":1707431938361,
+    "bid":"41945",
+    "bidSize":"0.04847245",
+    "ask":"41952",
+    "askSize":"0.31887",
+    "volume":"940.65235665",
+    "volumeQuote":"39236728.00683897"}
+*/
+
+#ifdef USAGE_DEBUG_JSON
+	int   bk_open     = doc["open"];
+	int   bk_high     = doc["high"];
+	int   bk_low      = doc["low"];
+	int   bk_last     = doc["last"];
+	int   bk_bid      = doc["bid"];
+	float bk_bidSize  = doc["bidSize"];
+	int   bk_ask      = doc["ask"];
+	float bk_askSize  = doc["askSize"];
+	float bk_volume   = doc["volume"];
+
+	static  int   bk_last_prev = 0;
+	if (bk_last_prev == 0) bk_last_prev = bk_last;
+
+	Serial.printf(
+		"Open:%5d (%5d -- %5d) Last:%5d(%4d),  Bid:%5d(%3d) Vol:%4.2f,  Ask:%5d(%3d) Size:%.4f Vol:%4.2f,  (%.2f)\n",
+		bk_open, bk_low, bk_high, bk_last, bk_last-bk_last_prev,
+		bk_bid, bk_bid-bk_last, bk_bidSize, 
+		bk_ask, bk_ask-bk_last, bk_askSize, bk_volume,
+		0.20664391 * bk_last
+		);
+
+	bk_last_prev = bk_last;
+#endif
+
+	int btc = doc["last"];
+
+	displayInit();
+
+	display.setTextColor(SSD1306_WHITE);	// White text
+	display.clearDisplay();
+
+	display.setCursor(SCREEN_WIDTH-4*6, SCREEN_HEIGHT-2*8);     // Start at top-left corner
+	display.printf("BTC");
+	display.setCursor(SCREEN_WIDTH-4*6, SCREEN_HEIGHT-1*8);     // Start at top-left corner
+	display.printf("Live");
+
+	display.setCursor(66, SCREEN_HEIGHT-2*8);
+	display.printf("{%d}", bootCount);
+
+	displayTime();
+	displayBTC(btc);
+	displayGraph(btc);
+
+	display.display();
+}
+
+void displayTime()
+{
+	struct tm timeinfo;
+	getLocalTime(&timeinfo);
+
+//	display.setTextSize(2);      			// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+//	display.setCursor(4, SCREEN_HEIGHT-16+2);
+	display.setCursor(4, SCREEN_HEIGHT-8+1);
+	display.print(&timeinfo, "%H:%M");
+//	display.setTextSize(1);
+}
+
+void displayGraph(int nr)
+{
+	const int graphArrayLength = sizeof(graphDataPionts) / sizeof(graphDataPionts[0]);
+
+	// Make room for the new value if needed
+	if (graphUsedLength < graphArrayLength) {
+		graphDataPionts[graphUsedLength++] = nr;
+	} else {
+		for(int i = 0; i < graphArrayLength-1; i++) {
+			graphDataPionts[i] = graphDataPionts[i+1];
+		}
+		graphDataPionts[graphArrayLength-1] = nr;
+	}
+
+	// Find min and max values
+	int min = 10000000;
+	int max = 0;
+	for (int i = 0; i < graphUsedLength; i++) 
+	{
+		if (graphDataPionts[i] > max) max = graphDataPionts[i];
+		if (graphDataPionts[i] < min) min = graphDataPionts[i];
+	}
+	int range = max - min + 1;
+
+//	display.setTextSize(1);      			// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+//	display.setCursor(128-3*6-6-4*6, 32-8+1);
+//	display.printf("%4d", range);
+
+	display.setCursor(66, SCREEN_HEIGHT-1*8);
+	display.printf("[%d]", range);
+
+	Serial.printf("BTC: %d, Range: %d - (min=%d - max=%d)\n", nr, range, min, max);
+
+#if 1
+
+	for (int i = 0; i < graphUsedLength; i += 1) 
+	{
+		int y = graphDataPionts[i] - min;			// y = 0..range
+		y = y * SCREEN_HEIGHT / range;	// y = 0..SCREEN_HEIGHT
+		y = SCREEN_HEIGHT - y - 1;		// y = SCREEN_HEIGHT..0
+
+		int x = i * SCREEN_WIDTH / graphArrayLength;
+//		Serial.printf("PIXEL%03d x=%d y=%d\n", i, x, y);
+
+		display.drawPixel(x, y, SSD1306_INVERSE);
+//		display.drawPixel(x, y, SSD1306_WHITE);
+	}
+
+#else
+	for (int i = 0; i < graphUsedLength; i++) {
+		int n = graphDataPionts[i];
+		n -= min;
+		n *= 31;
+		n /= range;
+		if (range == 0) n = 0;
+		display.drawPixel(i * SCREEN_WIDTH / graphArrayLength, 31-n, SSD1306_INVERSE);
+	}
+#endif
+}
+
+void displayBTC(int nr)
+{
+	display.setTextSize(3);      			// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+
+	if (nr >= 1000) {
+		display.setCursor(8, 0);
+		display.printf("%3d", nr / 1000);
+		// Draw dot
+		int x = display.getCursorX();
+		display.drawFastHLine(x, 0+24-5-2, 3, SSD1306_WHITE);
+		display.drawFastHLine(x, 0+24-4-2, 3, SSD1306_WHITE);
+		display.drawFastHLine(x, 0+24-3-2, 3, SSD1306_WHITE);
+
+		display.setCursor(x+6, 0);
+		display.printf("%03d", nr % 1000);
+	} else {
+		display.setCursor(16+3*18+6, 0);
+		display.printf("%3d", nr);
+	}
+
+	display.setTextSize(1);
+}
+
+void displayInit()
+{
+	static bool init = false;
+
+	if (!init)
+	{
+		init = true;
+
+		// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+		if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS, false, false)) {
+			Serial.printf("SSD1306 display initialize failed....\n");
+			while(1);
+		}
+
+//		display.clearDisplay();
+//		display.invertDisplay(false);
+		if (bootCount == 1)
+		{
+			display.setTextColor(SSD1306_WHITE);	// White text
+			display.setTextSize(1);					// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+			display.clearDisplay();
+			display.setCursor(0, 1*8);	display.printf("== Show BTC Price ==");
+			display.setCursor(0, 3*8);	display.printf(" PE0FKO:" __DATE__);
+			display.display();
+			delay(2000);
+			display.clearDisplay();
+			display.setCursor(0, 4);	display.printf(" API-URL:\n%s", https_host);
+			display.display();
+//			delay(2000);
+		}
+//		display.clearDisplay();
+	}
+}
+
+void displayMessage(int ms, const char line[])
+{
+	Serial.printf("Message: %s\n", line);
+
+	displayInit();
+
+	Message_Timer = millis();
+	Message_Value = ms;
+
+//	display.invertDisplay(true);
+
+	display.setTextColor(SSD1306_WHITE);	// White text
+	display.clearDisplay();
+//	display.setTextSize(1);					// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
+	display.setCursor(0, 2*8);
+	display.print(line);
+	display.display();
+
+//	display.invertDisplay(false);
+}
