@@ -10,4 +10,4 @@ LOLIN32 OLED version, 128x64 OLED display
 
 73, pe0fko,
 
-![BTC Display](https://github.com/pe0fko/PIO_ShowBTCPrice/blob/main/OLED_BTC.png?raw=true)
+![BTC Display](https://github.com/pe0fko/PIO_ShowBTCPrice/blob/main/OLED_BTC.jpg?raw=true)
