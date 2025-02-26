@@ -21,10 +21,14 @@
 #include <esp_sntp.h>				// sNTP lib
 #include <ArduinoOTA.h>				// OTA + mDNS
 
+#define	ARDUINO_EVENT_OTA_START		((arduino_event_id_t)(ARDUINO_EVENT_MAX+1))
+#define	ARDUINO_EVENT_OTA_END		((arduino_event_id_t)(ARDUINO_EVENT_MAX+2))
+
+extern	void	message(WiFiEvent_t event, WiFiEventInfo_t& info);
+
 class	WiFiWPS {
 public:
-	WiFiWPS()
-			{ _this = this; }
+	WiFiWPS()				{ _this = this; }
 
 	void	setOTA(String hostname, String password)
 			{ OTAHostName = hostname; OTAPassword = password; }
@@ -40,7 +44,9 @@ public:
 
 	bool		timeNtpIsSet()			// NTP time is set
 				{ return ntp_time_sync; }
-	
+
+//	virtual	void	message(WiFiEvent_t event, WiFiEventInfo_t& info);
+
 private:
 	String		OTAHostName;			// Hostname for OTA/mDNS
 	String		OTAPassword;			// Password for OTA

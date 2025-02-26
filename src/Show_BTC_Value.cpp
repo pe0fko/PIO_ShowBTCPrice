@@ -15,8 +15,8 @@
 
 
 #define BOOT_TIME_FOR_DEEP_SLEEP	6500	// Ms Boot time when deep sleep is enabled
-#define USAGE_DEEP_SLEEP_SEC		60		// Deep sleep time in seconds
-//#define	USAGE_DEEP_SLEEP_SEC		0		// No Deep sleep
+//#define	USAGE_DEEP_SLEEP_SEC		60		// Deep sleep time in seconds
+#define	USAGE_DEEP_SLEEP_SEC		0		// No Deep sleep
 //#define USAGE_DEBUG_JSON						// Debug JSON data
 #define GRAPH_STEP			1		// Number of steps in the graphDataPionts
 
@@ -435,3 +435,72 @@ void displayMessage(int ms, const char line[])
 	display.print(line);
 	display.display();
 }
+
+ // Needed for the WiFiWPS class
+ void message(WiFiEvent_t event, WiFiEventInfo_t& info)
+ {
+	switch (event)
+	{
+		case ARDUINO_EVENT_WIFI_STA_START:
+			Serial.printf("MSG: Station started.\n");
+			break; 
+
+		case ARDUINO_EVENT_WIFI_STA_STOP:
+			Serial.printf("MSG: Station stop.\n");
+			break;
+
+		case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+			Serial.printf("MSG: Connected %.*s\n"
+				,	info.wifi_sta_connected.ssid_len
+				,	info.wifi_sta_connected.ssid
+			);
+			break;
+
+		case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+			Serial.printf("MSG: WiFi IP: %s, GW: %s, NM: %s", 
+				IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(),
+				IPAddress(info.got_ip.ip_info.gw.addr).toString().c_str(),
+				IPAddress(info.got_ip.ip_info.netmask.addr).toString().c_str()
+			);
+		break;
+
+		case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+			Serial.printf("MSG: WiFi disconnected, ssid: %-.32s, reason: %d, rssi: %d\n",
+				info.wifi_sta_disconnected.ssid,
+				info.wifi_sta_disconnected.reason,
+				info.wifi_sta_disconnected.rssi
+				);
+		break;
+
+		case ARDUINO_EVENT_WPS_ER_SUCCESS:
+			Serial.printf("MSG: WPS Success.\n");
+			break;
+
+		case ARDUINO_EVENT_WPS_ER_FAILED:
+			Serial.printf("MSG: WPS failed, reason %d.\n",
+				info.wps_fail_reason
+			);
+			break;
+
+		case ARDUINO_EVENT_WPS_ER_TIMEOUT:
+			Serial.printf("MSG: WPS timeout.\n");
+			break;
+
+		case ARDUINO_EVENT_WPS_ER_PIN:
+			Serial.printf("MSG: WPS PIN code %.8s.\n",
+				info.wps_er_pin.pin_code
+			);
+			break;
+
+		case ARDUINO_EVENT_OTA_START:		// **No info struct**
+			Serial.printf("MSG: OTA Started.\n");
+			break;
+
+		case ARDUINO_EVENT_OTA_END:			// **No info struct**
+			Serial.printf("MSG: OTA Ended, REBOOT.\n");
+			break;
+
+		default:
+			break;
+	}
+ }

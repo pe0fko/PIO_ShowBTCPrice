@@ -13,32 +13,35 @@
 
 #include <WiFiWPS.h>
 
+
 void WiFiWPS::onEventHandler(WiFiEvent_t event, WiFiEventInfo_t info)
 {
 	switch (event) 
 	{
 #if DEBUG
 	case ARDUINO_EVENT_WIFI_STA_START:
-		log_i("WiFi Station Mode Started"); 
+		// log_i("WiFi station started.\n");
 		break;
 
-	case WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED:
+	case ARDUINO_EVENT_WIFI_STA_CONNECTED:
 	{
-		log_i("WiFi connected, ssid: %s, channel: %d, authmode: %d",
-			info.wifi_sta_connected.ssid,
-			info.wifi_sta_connected.channel,
-			info.wifi_sta_connected.authmode
-		);
+		// log_i("WiFi connected, ssid: %.*s, channel: %d, authmode: %d",
+		// 	info.wifi_sta_connected.ssid_len,
+		// 	info.wifi_sta_connected.ssid,
+		// 	info.wifi_sta_connected.channel,
+		// 	info.wifi_sta_connected.authmode
+		// );
 	}
 	break;
 #endif
 
 	case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-		log_i("WiFi IP: %s, GW: %s, NM: %s", 
-			IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(),
-			IPAddress(info.got_ip.ip_info.gw.addr).toString().c_str(),
-			IPAddress(info.got_ip.ip_info.netmask.addr).toString().c_str()
-		);
+
+		// log_i("WiFi IP: %s, GW: %s, NM: %s", 
+		// 	IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(),
+		// 	IPAddress(info.got_ip.ip_info.gw.addr).toString().c_str(),
+		// 	IPAddress(info.got_ip.ip_info.netmask.addr).toString().c_str()
+		// );
 
 		// Set the timezone for TZ_Europe_Amsterdam, CET-1CEST,M3.5.0,M10.5.0/3
 		configTime(0, 0, "time.google.com", "pool.ntp.org" );
@@ -46,27 +49,46 @@ void WiFiWPS::onEventHandler(WiFiEvent_t event, WiFiEventInfo_t info)
 		sntp_set_sync_interval(60 * 60 * 1000);						// 1 hour
 		esp_sntp_init();											// Start sNTP
 
-#ifdef FEATURE_OTA
 		// Start OTA & mDNS server.
-		if (OTAHostName.length() != 0) {
+		if (OTAHostName.length() != 0) 
+		{
 			log_i("OTA: Hostname %s defined", OTAHostName.c_str());
 			ArduinoOTA.setHostname(OTAHostName.c_str());
-			if (OTAPassword.length() != 0)
+			if (OTAPassword.length() != 0) {
 				ArduinoOTA.setPassword(OTAPassword.c_str());
+			}
+
+			// ArduinoOTA.setRebootOnSuccess(true);
+			// ArduinoOTA.setTimeout(1000);
+			// ArduinoOTA.setMdnsEnabled(true);
+			// ArduinoOTA.setPort(3232);
+
+			// ArduinoOTA.onStart([](void){
+			// 	int nullData = 0;
+			// 	::message(ARDUINO_EVENT_OTA_START, (arduino_event_info_t&)nullData);
+			// });
+			
+			// ArduinoOTA.onEnd([](void){
+			// 	int nullData = 0;
+			// 	::message(ARDUINO_EVENT_OTA_START, (arduino_event_info_t&)nullData);
+			// });
+			
 			ArduinoOTA.begin();
 		}
-#endif
+
 		break;
 
 	case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
 #ifdef DEBUG
-		Serial.printf("WiFi disconnected, ssid: %-.32s, reason: %d, rssi: %d\n",
-			info.wifi_sta_disconnected.ssid,
-			info.wifi_sta_disconnected.reason,
-			info.wifi_sta_disconnected.rssi
-			);
+		// Serial.printf("WiFi disconnected, ssid: %-.32s, reason: %d, rssi: %d\n",
+		// 	info.wifi_sta_disconnected.ssid,
+		// 	info.wifi_sta_disconnected.reason,
+		// 	info.wifi_sta_disconnected.rssi
+		// 	);
 #endif
-		esp_sntp_stop();								// Stop sNTP
+
+		ArduinoOTA.end();							// Stop OTA
+		esp_sntp_stop();							// Stop sNTP
 		ntp_time_sync = false;
 
 		break;
@@ -76,17 +98,23 @@ void WiFiWPS::onEventHandler(WiFiEvent_t event, WiFiEventInfo_t info)
 		wifi_config_t conf;
 		ESP_ERROR_CHECK( esp_wifi_get_config((wifi_interface_t)ESP_IF_WIFI_STA, &conf) );
 		ESP_ERROR_CHECK( esp_wifi_wps_disable() );
+		wps_started = false;
+
 		wifiSSID = reinterpret_cast<char*>(conf.sta.ssid);
 		wifiPSK  = reinterpret_cast<char*>(conf.sta.password);
-
 		log_i("WiFi WPS Successful, SSID:%s Password:%s", wifiSSID.c_str(), wifiPSK.c_str() );
+
 		delay(10);
-		WiFi.begin();	// Connect to the WPS credentials in NVS.
+		WiFi.begin();			// Connect to the WPS credentials in NVS.
 	}
 	break;
 
 	case ARDUINO_EVENT_WPS_ER_FAILED:
-	case ARDUINO_EVENT_WPS_ER_TIMEOUT:
+		ESP_ERROR_CHECK( esp_wifi_wps_disable() );
+		wps_started = false;
+		break;
+
+case ARDUINO_EVENT_WPS_ER_TIMEOUT:
 		ESP_ERROR_CHECK( esp_wifi_wps_disable() );
 		ESP_ERROR_CHECK( esp_wifi_wps_enable(&config) );
 		ESP_ERROR_CHECK( esp_wifi_wps_start(0) );
@@ -97,13 +125,17 @@ void WiFiWPS::onEventHandler(WiFiEvent_t event, WiFiEventInfo_t info)
 		break;
 
 	default:
-		break;
+		return;
 	}
+
+	::message(event, info);
 }
+
 
 void WiFiWPS::wpsStart()
 {
 	log_i("WiFi WPS mode started.");
+	// message("WPS/nStarted\n");
 	wps_started = true;
 	ESP_ERROR_CHECK( esp_wifi_disconnect() );
 	ESP_ERROR_CHECK( esp_wifi_wps_enable(&config) );
@@ -143,6 +175,7 @@ wl_status_t WiFiWPS::begin()
 	return WL_CONNECTED;
 }
 
+
 void WiFiWPS::onTimeSyncHandler(struct timeval *t)
 {
 	ntp_time_sync = true;
@@ -152,6 +185,57 @@ void WiFiWPS::onTimeSyncHandler(struct timeval *t)
 	Serial.println(localtime_r(&t->tv_sec, &info), "sNTP time sync: %A, %B %d %Y, %H:%M:%S");
 #endif	
 }
+
+
+// int WiFiWPS::message(const char* format, ...)
+// {
+// 	char buf[64];
+// 	va_list arg;
+// 	va_start(arg, format);
+// 	int len = vsnprintf(buf, sizeof(buf), format, arg);
+// 	va_end(arg);
+// 	if(len >= 0) {
+// 		len = Serial.write(buf, len);
+// 	}
+// 	return len;
+// }
+
+
+// void message( WiFiEvent_t event, WiFiEventInfo_t& info )
+// {
+// 	switch (event)
+// 	{
+// 		case ARDUINO_EVENT_WIFI_STA_START:
+// 		case ARDUINO_EVENT_WIFI_STA_STOP:
+// 			break;
+
+// 		case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+// 			break;
+
+// 		case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+// 			break;
+
+// 		case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+// 			break;
+
+// 		case ARDUINO_EVENT_WPS_ER_SUCCESS:
+// 			break;
+
+// 		case ARDUINO_EVENT_WPS_ER_FAILED:
+// 			break;
+
+// 		case ARDUINO_EVENT_WPS_ER_TIMEOUT:
+// 			break;
+
+// 		case ARDUINO_EVENT_WPS_ER_PIN:
+// 			break;
+
+// 		default:
+// 			break;
+// 	}
+// }
+
+
 
 // Pointer to the one and only WiFiWPS class
 class WiFiWPS* WiFiWPS::_this = nullptr;
