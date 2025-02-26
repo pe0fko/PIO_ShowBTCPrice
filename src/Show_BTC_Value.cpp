@@ -17,16 +17,11 @@
 #define BOOT_TIME_FOR_DEEP_SLEEP	6500	// Ms Boot time when deep sleep is enabled
 #define USAGE_DEEP_SLEEP_SEC		60		// Deep sleep time in seconds
 //#define	USAGE_DEEP_SLEEP_SEC		0		// No Deep sleep
-//#define	USAGE_DEEP_SLEEP_SEC		20		// Deep sleep debug time DEBUG
 //#define USAGE_DEBUG_JSON						// Debug JSON data
-
-//#define	USAGE_SLEEP_SEC				60		// Sleep time for 1 minute
-#define	USAGE_SLEEP_SEC				10		// Debug sleep time
-
 #define GRAPH_STEP			1		// Number of steps in the graphDataPionts
-//#define	DEBUG
 
 #include <Arduino.h>				// Arduino
+//#include <esp32-hal.h>
 #include <WiFi.h>					// WiFi
 #include <time.h>					// time
 #include <esp_sntp.h>				// sNTP
@@ -36,10 +31,8 @@
 #include <SPI.h>					// SPI
 #include <Wire.h>					// I2C
 #include <Adafruit_SSD1306.h>		// Adafruit SSD1306 Wemos Mini OLED
-//#include <ESPmDNS.h>				// mDNS
-#include <ArduinoOTA.h>				// OTA + mDNS
-#include <WiFi_SSID.h>				// WiFi SSID and password
 #include "certificate.h"			// Root certificate for https definded
+#include <WiFiWPS.h>				// WiFi WPS, OTA & sNTP auto config
 
 #define SCREEN_WIDTH	128			// OLED display width, in pixels
 #define SCREEN_HEIGHT	64			// OLED display height, in pixels
@@ -48,16 +41,15 @@
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-const		uint32_t	GetHttps_Value	= USAGE_SLEEP_SEC * 1000;	// 1min in ms
+const		uint32_t	GetHttps_Value	= 60 * 1000;	// 1min in ms
 static		uint32_t	GetHttps_Timer	= 0UL;
 
 static		uint32_t	Message_Value	= 0U;
 static		uint32_t	Message_Timer	= 0UL;
 
-//static		uint32_t	Process_Timer	= 0UL;
-static		WiFiMulti	wifiMulti;
-static		String		HostName		= "ShowBtc";
-volatile	bool		ntp_time_sync	= false;
+class		WiFiWPS		wifiWPS;		// Define the WiFi WPS class
+static		String		OTAHostName		= "ShowBtc";
+static		String		OTAPassword		= "pe0fko";
 
 // RTC_DATA_ATTR, 8Kb of RTC memory
 RTC_DATA_ATTR	int		graphDataPionts[SCREEN_WIDTH * GRAPH_STEP];
@@ -74,14 +66,10 @@ void		displayGraph(int nr, int x0, int y0, int w0, int h0);
 void		displayMessage(int ms, const char line[]);
 void		print_wakeup_reason();
 
-
-#include "sdkconfig.h"
-#if CONFIG_ESP_WIFI_REMOTE_ENABLED
-#error "WPS is only supported in SoCs with native Wi-Fi support"
-#endif
-
 void setup() 
 {
+	log_i("Setup start\n");
+	
 	Wire.begin(5, 4);		// SDA, SCL, Wemos LOLIN32 oLED
 
 	bootCount += 1;			// Keep track of the number of boots
@@ -90,94 +78,23 @@ void setup()
 	Serial.setDebugOutput(true);
 	while(!Serial) ;
 
+//	Serial.printf("=== %d\n", *(int*)0);
+
 	Serial.printf("=== PE0FKO: Show BTC Price\n");
 	Serial.printf("=== Build: %s %s\n", __DATE__, __TIME__);
 	if (bootCount == 1) 
 	{
 		Serial.printf("=== First boot, clear RTC memory\n");
-//		memset(graphDataPionts, 0, sizeof(graphDataPionts));
-//		graphUsedLength = 0;
+		memset(graphDataPionts, 0, sizeof(graphDataPionts));
+		graphUsedLength = 0;
 		displayInit();		
 	} else
 		Serial.printf("=== Boot %d times\n", bootCount);
 
-#ifdef DEBUG
-	WiFi.onEvent(
-		[](WiFiEvent_t event, WiFiEventInfo_t info) 
-		{
-			Serial.printf("WiFi connected, ssid: %-.32s, channel: %d, authmode: %d\n",
-				info.wifi_sta_connected.ssid,
-				info.wifi_sta_connected.channel,
-				info.wifi_sta_connected.authmode
-				);
-		}
-		, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED
-	);
-#endif
-
-	// set time sync notification call-back function
-	sntp_set_time_sync_notification_cb(
-		[](struct timeval *t)
-		{
-			ntp_time_sync = true;
-#ifdef DEBUG
-			struct tm timeinfo;
-			getLocalTime(&timeinfo);
-			Serial.println(&timeinfo, "sNTP: %A, %B %d %Y %H:%M:%S zone %Z %z ");
-			Serial.printf("sNTP sync interval: %d sec\n", sntp_get_sync_interval() / 1000 );
-#endif
-		}
-	);
-
-	// Trigger sNTP on the event of WiFi connected
-	WiFi.onEvent(
-		[](WiFiEvent_t event, WiFiEventInfo_t info) 
-		{
-#ifdef DEBUG
-			Serial.printf("WiFi IP: %s, GW: %s, NM: %s\n", 
-				IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(),
-				IPAddress(info.got_ip.ip_info.gw.addr).toString().c_str(),
-				IPAddress(info.got_ip.ip_info.netmask.addr).toString().c_str()
-				);
-#endif
-			// Set the timezone for TZ_Europe_Amsterdam, CET-1CEST,M3.5.0,M10.5.0/3
-			configTime(0, 0, "time.google.com", "pool.ntp.org" );
-			setenv("TZ","CET-1CEST,M3.5.0,M10.5.0/3",1);	tzset();	// After the configTime!
-			sntp_set_sync_interval(60 * 60 * 1000);						// 1 hour
-			esp_sntp_init();											// Start sNTP
-		}
-		, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP
-	);
-
-	// Trigger sNTP on the event of WiFi disconnected
-	WiFi.onEvent(
-		[](WiFiEvent_t event, WiFiEventInfo_t info) 
-		{
-#ifdef DEBUG
-			Serial.printf("WiFi disconnected, ssid: %-.32s, reason: %d, rssi: %d\n",
-				info.wifi_sta_disconnected.ssid,
-				info.wifi_sta_disconnected.reason,
-				info.wifi_sta_disconnected.rssi
-				);
-#endif
-			esp_sntp_stop();								// Stop sNTP
-			ntp_time_sync = false;
-		}
-		, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED
-	);
-
-//	Serial.printf("=== WiFi mode STA\n");
-	WiFi.disconnect(true);						// Disconnect WiFi persistent WiFi
-	WiFi.mode(WIFI_STA);
-
-//	Serial.printf("=== Add APs\n");
-	for(int i = 0; i < WifiApListNumber; i++)
-		wifiMulti.addAP(WifiApList[i].ssid, WifiApList[i].passphrase);
-
-	// Start OTA & mDNS server.
-	ArduinoOTA.setHostname(HostName.c_str());
-	ArduinoOTA.setPassword(OtaPassword);
-	ArduinoOTA.begin();
+	// Enable the WiFi, WPS, sNTP and OTA
+	wifiWPS.setOTA( OTAHostName, OTAPassword );
+	wifiWPS.begin();
+//	wifiWPS.getWifiSsidPsk(ssid, psk);	// Retrieve the WPS SSID/PSK
 
 	GetHttps_Timer = millis() - GetHttps_Value;
 
@@ -187,22 +104,22 @@ void setup()
 
 void loop() 
 {
-	bool enter_deep_sleep = false;
+	wifiWPS.handle();
 
-	ArduinoOTA.handle();
+	bool enter_deep_sleep = false;
 
 	if (Message_Value != 0 && ((millis() - Message_Timer) >= Message_Value))	// Clear message after time
 	{
 		Message_Value = 0;
 	}
 	else
-	if ((wifiMulti.run(5000) != WL_CONNECTED)) 
+	if ((WiFi.status() != WL_CONNECTED)) 
 	{
-		Serial.printf("Error: WiFI Multi connect, not connected.\n");
-		displayMessage(1000, "WiFi Connect");
+		Serial.printf("Error: WiFi status not connect!\n");
+		delay(1000);
 	}
 	else
-	if (ntp_time_sync == false)				// Wait for NTP time sync
+	if (!wifiWPS.timeNtpIsSet())				// Wait for NTP time sync
 	{
 #if 1
 		/* Wait untill the sNTP is completed and the correct time
@@ -215,6 +132,7 @@ void loop()
 		{
 			if (ntp_wait++ == 5)
 			{
+				Serial.printf("Waiting for the sNTP date and time\n");
 				displayMessage(1000, "Wait sNTP");
 				ntp_wait = 0;
 			}
@@ -262,11 +180,14 @@ void loop()
 	}
 }
 
+
 bool get_https(const char *https_host, String &payload)
 {
 	WiFiClientSecure*	client;
 	HTTPClient			https;
 	bool				ret = false;
+
+	https.setUserAgent("PE0FKO ESP32 ShowBTC");
 
 	if ((client = new WiFiClientSecure) != NULL)
 	{
@@ -492,7 +413,7 @@ void displayInit()
 			display.clearDisplay();
 			display.setCursor(0, 1*8);	display.printf("== Show BTC Price ==");
 			display.setCursor(0, 2*8);	display.printf(" PE0FKO:" __DATE__);
-			display.setCursor(0, 4*8);	display.printf(" API-URL:\n%s", https_host);
+			display.setCursor(0, 4*8);	display.printf("== API-URL:\n%s", https_host);
 			display.display();
 			delay(2000);
 		}
