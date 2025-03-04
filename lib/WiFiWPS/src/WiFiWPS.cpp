@@ -13,8 +13,7 @@
 
 #include <WiFiWPS.h>
 
-
-void WiFiWPS::onEventHandler(WiFiEvent_t event, WiFiEventInfo_t info)
+void WiFiWPS::onEventHandler(WiFiEvent_t event, WiFiEventInfo_t& info)
 {
 	switch (event) 
 	{

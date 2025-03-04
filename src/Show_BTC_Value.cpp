@@ -14,14 +14,17 @@
 //=====================================================================
 
 
-#define BOOT_TIME_FOR_DEEP_SLEEP	6500	// Ms Boot time when deep sleep is enabled
-//#define	USAGE_DEEP_SLEEP_SEC		60		// Deep sleep time in seconds
-#define	USAGE_DEEP_SLEEP_SEC		0		// No Deep sleep
-//#define USAGE_DEBUG_JSON						// Debug JSON data
-#define GRAPH_STEP			1		// Number of steps in the graphDataPionts
+#ifdef DEBUG
+  #define	USAGE_DEEP_SLEEP_SEC	0		// No Deep sleep
+  #define	GRAPH_SIZE			(30)		// Number of graphDataPionts
+#else
+  #define	USAGE_DEEP_SLEEP_SEC	60		// Deep sleep time in seconds
+  #define	GRAPH_SIZE			(4*60)		// Number of graphDataPionts, 4h
+#endif
+  //#define USAGE_DEBUG_JSON						// Debug JSON data
+  #define BOOT_TIME_FOR_DEEP_SLEEP	6500	// Ms Boot time when deep sleep is enabled
 
 #include <Arduino.h>				// Arduino
-//#include <esp32-hal.h>
 #include <WiFi.h>					// WiFi
 #include <time.h>					// time
 #include <esp_sntp.h>				// sNTP
@@ -33,6 +36,10 @@
 #include <Adafruit_SSD1306.h>		// Adafruit SSD1306 Wemos Mini OLED
 #include "certificate.h"			// Root certificate for https definded
 #include <WiFiWPS.h>				// WiFi WPS, OTA & sNTP auto config
+#include <Fonts/FreeSansBold12pt7b.h>
+#include <Fonts/FreeSansBold9pt7b.h>		// Sans, Mono, 9, 12 ,18, 24
+#define	BtcFont1		FreeSansBold12pt7b
+#define	BtcFont2		FreeSansBold9pt7b
 
 #define SCREEN_WIDTH	128			// OLED display width, in pixels
 #define SCREEN_HEIGHT	64			// OLED display height, in pixels
@@ -41,7 +48,11 @@
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+#ifdef DEBUG
+const		uint32_t	GetHttps_Value	= 30 * 1000;	// 1min in ms
+#else
 const		uint32_t	GetHttps_Value	= 60 * 1000;	// 1min in ms
+#endif
 static		uint32_t	GetHttps_Timer	= 0UL;
 
 static		uint32_t	Message_Value	= 0U;
@@ -52,7 +63,7 @@ static		String		OTAHostName		= "ShowBtc";
 static		String		OTAPassword		= "pe0fko";
 
 // RTC_DATA_ATTR, 8Kb of RTC memory
-RTC_DATA_ATTR	int		graphDataPionts[SCREEN_WIDTH * GRAPH_STEP];
+RTC_DATA_ATTR	int		graphDataPionts[GRAPH_SIZE];
 RTC_DATA_ATTR	int		graphUsedLength;
 RTC_DATA_ATTR	int		bootCount;
 
@@ -62,14 +73,12 @@ void		JsonDecode(const char* json);
 void		displayInit();
 void		displayTime();
 void		displayBTC(int nr, int y0);
-void		displayGraph(int nr, int x0, int y0, int w0, int h0);
+void		displayGraph(int btc, int x0, int x1, int y0, int y1);
 void		displayMessage(int ms, const char line[]);
 void		print_wakeup_reason();
 
 void setup() 
 {
-	log_i("Setup start\n");
-	
 	Wire.begin(5, 4);		// SDA, SCL, Wemos LOLIN32 oLED
 
 	bootCount += 1;			// Keep track of the number of boots
@@ -77,8 +86,7 @@ void setup()
 	Serial.begin(115200);
 	Serial.setDebugOutput(true);
 	while(!Serial) ;
-
-//	Serial.printf("=== %d\n", *(int*)0);
+	log_d("Setup start\n");
 
 	Serial.printf("=== PE0FKO: Show BTC Price\n");
 	Serial.printf("=== Build: %s %s\n", __DATE__, __TIME__);
@@ -99,7 +107,6 @@ void setup()
 	GetHttps_Timer = millis() - GetHttps_Value;
 
 	Serial.printf("=== Exit the setup()\n");
-	Serial.flush();
 }
 
 void loop() 
@@ -202,10 +209,10 @@ bool get_https(const char *https_host, String &payload)
 				if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) 
 				{
 					payload = https.getString();
-#ifdef DEBUG
-//					Serial.printf("[HTTPS] GET: %s\n", payload.c_str());
-//					Serial.flush();
-#endif
+// #ifdef DEBUG
+// 					Serial.printf("[HTTPS] GET: %s\n", payload.c_str());
+// 					Serial.flush();
+// #endif
 					ret = true;
 				}
 			} else {
@@ -301,13 +308,14 @@ void JsonDecode(const char* json)
 #endif
 
 	// Draw the boxes
-	display.drawRect(0,  0, display.width(), display.height()-9     , WHITE);
-	display.drawRect(0, 24, display.width(), display.height()-24-9, WHITE);
+	display.drawRect(0,  0, display.width(), display.height()-9   , SSD1306_WHITE);
+	display.drawFastHLine(0, 24, display.width(), SSD1306_WHITE);
 
+	// Box Graph: x0=1, y0=25, x1=126, y1=55
 
 	displayTime();
-	displayBTC(btc, 2);
-	displayGraph(btc, 1, 23, display.width()-2, display.height() - 24 - 9);
+	displayBTC(btc, 4);
+	displayGraph(btc, 1, 25, 126, 53);
 
 	display.display();
 }
@@ -320,7 +328,7 @@ void displayTime()
 	display.print(&timeinfo, "%H:%M");
 }
 
-void displayGraph(int nr, int x0, int y0, int w0, int h0)
+void displayGraph(int nr, int x0, int y0, int x1, int y1)
 {
 	const int graphArrayLength = sizeof(graphDataPionts) / sizeof(graphDataPionts[0]);
 
@@ -334,6 +342,8 @@ void displayGraph(int nr, int x0, int y0, int w0, int h0)
 		graphDataPionts[graphArrayLength-1] = nr;
 	}
 
+	log_d("BLOCK: x0=%d y0=%d x1=%d y1=%d, AL=%d", x0, y0, x1, y1, graphArrayLength);
+
 	// Find min and max values
 	int min = 10000000;
 	int max = 0;
@@ -342,54 +352,52 @@ void displayGraph(int nr, int x0, int y0, int w0, int h0)
 		if (graphDataPionts[i] > max) max = graphDataPionts[i];
 		if (graphDataPionts[i] < min) min = graphDataPionts[i];
 	}
-	int range = max - min + 1;
-//	Serial.printf("BLOCK: range=%d min=%d max=%d\n", range, min, max);
+
+	log_d("BLOCK: min=%d max=%d, range=%d", min, max, max-min);
+	if (min == max)	return;
 
 	display.setCursor(7*6, SCREEN_HEIGHT-8);
-	display.printf("[%d]", range);
-
-//	Serial.printf("BTC: %d, Range: %d - (min=%d - max=%d)\n", nr, range, min, max);
-//	Serial.printf("BLOCK: x0=%d y0=%d w0=%d h0=%d\n", x0, y0, w0, h0);
+	display.printf("[%d]", max - min);
 
 	for (int i = 0; i < graphUsedLength; i += 1) 
 	{
-		int x = x0 + i * w0 / graphArrayLength;
-		int y = graphDataPionts[i] - min - 1;		// y = 0..range
-		y = y * h0 / range;							// y = 0..h0
-		y = (y0+h0) - y;
+		int x = map(i, 0, graphArrayLength-1, x0, x1);		// Map the point to the screen graph box
+		int y = map(graphDataPionts[i], min, max, y1, y0);	// both x and y. The y is reversed.
 
-//		Serial.printf("PIXEL%03d x=%d y=%d\n", i, x, y);
-		display.drawPixel(x, y, SSD1306_WHITE);
+		if (graphUsedLength >= graphArrayLength)
+			log_d("BLOCK%03d: x=%d, y=%d", i, x, y);
+
+		display.drawPixel(x, y, SSD1306_INVERSE);
 	}
 }
 
 void displayBTC(int nr, int y0)
 {
-	// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
-	display.setTextSize( 3 );
+	int16_t		x1,y1;
+	uint16_t	w1,h1,w2,h2;
+	char		n1[8], n2[8];
 
-	int t = 18;
-	int w1 = nr >= 1000000 ? 4*t : nr >= 100000 ? 3*t : nr >= 10000 ? 2*t : nr >= 1000 ? 1*t : 0*t;
-	int w2 = 6;
-	int w3 = 3*t;
-//	const int y  = 0;
+	snprintf(n1, 8, "%d.", nr / 1000);
+	snprintf(n2, 8, "%03d", nr % 1000);
 
-	int x = (display.width() - (w1 + w2 + w3)) / 2;
+	display.setFont(&BtcFont2);
+	display.getTextBounds(n2, 20, 20, &x1, &y1, &w2, &h2);
+
+	display.setFont(&BtcFont1);
+	display.getTextBounds(n1, 20, 20, &x1, &y1, &w1, &h1);
+
+	Serial.printf("y0=%d, w1=%d, h1=%d, w2=%d, h2=%d\n", y0, w1,h1, w2,h2);
+
+	int x = (display.width() - w1 - w2) / 2;
 	if (x < 0) x = 0;
-	display.setCursor(x, y0);
-	display.printf("%d", nr / 1000);
 
-	// Draw dot
-	x += w1;
-	display.drawFastHLine(x, y0+24-5-2, 3, SSD1306_WHITE);
-	display.drawFastHLine(x, y0+24-4-2, 3, SSD1306_WHITE);
-	display.drawFastHLine(x, y0+24-3-2, 3, SSD1306_WHITE);
+	display.setCursor(x, y0 + h1);
+	display.print(n1);
 
-	x += w2;
-	display.setCursor(x, y0);
-	display.printf("%03d", nr % 1000);
+	display.setFont(&BtcFont2);
+	display.print(n2);
 
-	display.setTextSize(1);
+	display.setFont();
 }
 
 void displayInit()
@@ -411,8 +419,8 @@ void displayInit()
 			display.setTextColor(SSD1306_WHITE);	// White text
 			display.setTextSize(1);					// text size. 1 is default 6x8, 2 is 12x16, 3 is 18x24, etc
 			display.clearDisplay();
-			display.setCursor(0, 1*8);	display.printf("== Show BTC Price ==");
-			display.setCursor(0, 2*8);	display.printf(" PE0FKO:" __DATE__);
+			display.setCursor(0, 1*8);	display.printf("== Show BTC Price");
+			display.setCursor(0, 2*8);	display.printf("==PE0FKO:" __DATE__);
 			display.setCursor(0, 4*8);	display.printf("== API-URL:\n%s", https_host);
 			display.display();
 			delay(2000);
@@ -442,22 +450,22 @@ void displayMessage(int ms, const char line[])
 	switch (event)
 	{
 		case ARDUINO_EVENT_WIFI_STA_START:
-			Serial.printf("MSG: Station started.\n");
+			// Serial.printf("MSG: Station started.\n");
 			break; 
 
 		case ARDUINO_EVENT_WIFI_STA_STOP:
-			Serial.printf("MSG: Station stop.\n");
+			// Serial.printf("MSG: Station stop.\n");
 			break;
 
 		case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-			Serial.printf("MSG: Connected %.*s\n"
-				,	info.wifi_sta_connected.ssid_len
-				,	info.wifi_sta_connected.ssid
-			);
+			// Serial.printf("MSG: Connected %.*s\n"
+			// 	,	info.wifi_sta_connected.ssid_len
+			// 	,	info.wifi_sta_connected.ssid
+			// );
 			break;
 
 		case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-			Serial.printf("MSG: WiFi IP: %s, GW: %s, NM: %s", 
+			Serial.printf("MSG: WiFi IP: %s, GW: %s, NM: %s\n", 
 				IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(),
 				IPAddress(info.got_ip.ip_info.gw.addr).toString().c_str(),
 				IPAddress(info.got_ip.ip_info.netmask.addr).toString().c_str()

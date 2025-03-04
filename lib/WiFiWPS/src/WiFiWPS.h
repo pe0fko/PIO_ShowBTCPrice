@@ -11,8 +11,9 @@
 //
 //=====================================================================
 
-#ifndef WifiWPS_H_
-#define WifiWPS_H_
+#pragma once
+//#ifndef WifiWPS_H_
+//#define WifiWPS_H_
 
 #include <WiFi.h>
 #include <esp32-hal.h>
@@ -67,8 +68,8 @@ private:
 	static	void	onTimeSync(struct timeval *t)
 	{ if (_this) _this->onTimeSyncHandler(t); }
 
-	void onEventHandler(WiFiEvent_t event, WiFiEventInfo_t info);
+	void onEventHandler(WiFiEvent_t event, WiFiEventInfo_t& info);
 	void onTimeSyncHandler(struct timeval *t);
 };
 
-#endif /* WifiWPS_H_ */
+//#endif /* WifiWPS_H_ */
