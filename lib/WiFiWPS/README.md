@@ -1,7 +1,7 @@
 WiFi WPS Library for Arduino
 ============================
 
-This library add the wifi WPS function to the arduino sketch
+This library add the wifi WPS function to the arduino sketch.
 It is still in the process of code changes.
 
 Changelog
@@ -9,6 +9,7 @@ Changelog
 * v1.0.0
 
     * Initial Release
+	* PE0FKO, 2025/02/15
 
 
 License
