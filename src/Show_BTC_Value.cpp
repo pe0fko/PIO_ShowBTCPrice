@@ -58,7 +58,7 @@ static		uint32_t	GetHttps_Timer	= 0UL;
 static		uint32_t	Message_Value	= 0U;
 static		uint32_t	Message_Timer	= 0UL;
 
-class		WiFiWPS		wifiWPS;		// Define the WiFi WPS class
+//class		WiFiWPS		wifiWPS;		// Define the WiFi WPS class
 static		String		OTAHostName		= "ShowBtc";
 static		String		OTAPassword		= "pe0fko";
 
@@ -101,8 +101,22 @@ void setup()
 
 	// Enable the WiFi, WPS, sNTP and OTA
 	wifiWPS.setOTA( OTAHostName, OTAPassword );
+#if 1
+	wifiWPS.init();
+	// delay(2000);		// Wait for the WPS to start
+	if (WiFi.status() == WL_CONNECTED)	// Check if the WiFi is connected
+	{
+		Serial.printf("=== WiFi connected\n");
+	}
+	else
+	{
+		Serial.printf("=== WiFi not connected, start WPS\n");
+		// wifiWPS.wpsStart();
+	}
+#else
 	wifiWPS.begin();
 //	wifiWPS.getWifiSsidPsk(ssid, psk);	// Retrieve the WPS SSID/PSK
+#endif
 
 	GetHttps_Timer = millis() - GetHttps_Value;
 
@@ -111,8 +125,6 @@ void setup()
 
 void loop() 
 {
-	wifiWPS.handle();
-
 	bool enter_deep_sleep = false;
 
 	if (Message_Value != 0 && ((millis() - Message_Timer) >= Message_Value))	// Clear message after time
@@ -120,10 +132,10 @@ void loop()
 		Message_Value = 0;
 	}
 	else
-	if ((WiFi.status() != WL_CONNECTED)) 
+	if (wifiWPS.run() != WL_CONNECTED)
 	{
-		Serial.printf("Error: WiFi status not connect!\n");
-		delay(1000);
+		// Serial.printf("Error: WiFi status not connect!\n");
+		// delay(1000);
 	}
 	else
 	if (!wifiWPS.timeNtpIsSet())				// Wait for NTP time sync
@@ -180,7 +192,7 @@ void loop()
 			);
 			esp_deep_sleep_start();
 #else
-			Serial.println("Deep sleep not enabled");
+			Serial.println("Deep sleep *NOT* enabled");
 			JsonDecode(payload.c_str());				// Decode the JSON data, the BTC price, and display it
 #endif
 		}
@@ -291,7 +303,7 @@ void JsonDecode(const char* json)
 #endif
 
 	int btc = doc["last"];
-	Serial.printf("Value BTC is %d euro.\n", btc);
+	log_d("Value BTC is %d euro.", btc);
 
 	displayInit();
 
@@ -342,7 +354,7 @@ void displayGraph(int nr, int x0, int y0, int x1, int y1)
 		graphDataPionts[graphArrayLength-1] = nr;
 	}
 
-	log_d("BLOCK: x0=%d y0=%d x1=%d y1=%d, AL=%d", x0, y0, x1, y1, graphArrayLength);
+	// log_d("BLOCK: x0=%d y0=%d x1=%d y1=%d, AL=%d", x0, y0, x1, y1, graphArrayLength);
 
 	// Find min and max values
 	int min = 10000000;
@@ -353,7 +365,7 @@ void displayGraph(int nr, int x0, int y0, int x1, int y1)
 		if (graphDataPionts[i] < min) min = graphDataPionts[i];
 	}
 
-	log_d("BLOCK: min=%d max=%d, range=%d", min, max, max-min);
+	// log_d("BLOCK: min=%d max=%d, range=%d", min, max, max-min);
 	if (min == max)	return;
 
 	display.setCursor(7*6, SCREEN_HEIGHT-8);
@@ -364,8 +376,8 @@ void displayGraph(int nr, int x0, int y0, int x1, int y1)
 		int x = map(i, 0, graphArrayLength-1, x0, x1);		// Map the point to the screen graph box
 		int y = map(graphDataPionts[i], min, max, y1, y0);	// both x and y. The y is reversed.
 
-		if (graphUsedLength >= graphArrayLength)
-			log_d("BLOCK%03d: x=%d, y=%d", i, x, y);
+		// if (graphUsedLength >= graphArrayLength)
+			// log_d("BLOCK%03d: x=%d, y=%d", i, x, y);
 
 		display.drawPixel(x, y, SSD1306_INVERSE);
 	}
@@ -386,7 +398,7 @@ void displayBTC(int nr, int y0)
 	display.setFont(&BtcFont1);
 	display.getTextBounds(n1, 20, 20, &x1, &y1, &w1, &h1);
 
-	Serial.printf("y0=%d, w1=%d, h1=%d, w2=%d, h2=%d\n", y0, w1,h1, w2,h2);
+	log_d("y0=%d, w1=%d, h1=%d, w2=%d, h2=%d", y0, w1,h1, w2,h2);
 
 	int x = (display.width() - w1 - w2) / 2;
 	if (x < 0) x = 0;
@@ -444,6 +456,47 @@ void displayMessage(int ms, const char line[])
 	display.display();
 }
 
+void displayLineCenter(int line, const char* str)
+{
+	Serial.printf("Message #%d: %s\n", line, str);
+	display.setCursor(0, 4 + line * 8);
+	display.print(str);
+}
+
+int SSD1306_Message(const char* format, ...)
+{
+	char buf[64];
+	va_list arg;
+	va_start(arg, format);
+	int len = vsnprintf(buf, sizeof(buf), format, arg);
+	va_end(arg);
+
+	if(len >= 0) {
+		displayInit();
+
+		display.setTextColor(SSD1306_WHITE);	// White text
+		display.clearDisplay();
+
+		int l = 0;
+		char* ptr0 = buf;
+		char* ptr1 = strchr(ptr0, '\n');
+		while (ptr1 != NULL)
+		{
+			*ptr1 = '\0';
+			displayLineCenter(l++, ptr0);
+			ptr0 = ptr1 + 1;
+			ptr1 = strchr(ptr0, '\n');
+		}
+		displayLineCenter(l, ptr0);
+
+		display.display();
+
+		delay(3000);
+	}
+
+	return len;
+}
+
  // Needed for the WiFiWPS class
  void message(WiFiEvent_t event, WiFiEventInfo_t& info)
  {
@@ -458,36 +511,51 @@ void displayMessage(int ms, const char line[])
 			break;
 
 		case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-			// Serial.printf("MSG: Connected %.*s\n"
-			// 	,	info.wifi_sta_connected.ssid_len
-			// 	,	info.wifi_sta_connected.ssid
-			// );
+#ifdef DEBUG
+			SSD1306_Message("WiFi connect\n%.*s\nCH:%d"
+				,	info.wifi_sta_connected.ssid_len
+				,	info.wifi_sta_connected.ssid
+				,	info.wifi_sta_connected.channel
+			);
+#endif
 			break;
 
 		case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-			Serial.printf("MSG: WiFi IP: %s, GW: %s, NM: %s\n", 
-				IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(),
-				IPAddress(info.got_ip.ip_info.gw.addr).toString().c_str(),
-				IPAddress(info.got_ip.ip_info.netmask.addr).toString().c_str()
+			// Serial.printf("MSG: WiFi IP: %s, GW: %s, NM: %s\n", 
+			// 	IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(),
+			// 	IPAddress(info.got_ip.ip_info.gw.addr).toString().c_str(),
+			// 	IPAddress(info.got_ip.ip_info.netmask.addr).toString().c_str()
+			// );
+#ifdef DEBUG
+			SSD1306_Message("WiFi IP\n%s\nGW:%s\nNM:%s"
+				,	IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str()
+				,	IPAddress(info.got_ip.ip_info.gw.addr).toString().c_str()
+				,	IPAddress(info.got_ip.ip_info.netmask.addr).toString().c_str()
 			);
-		break;
+#endif
+			break;
 
 		case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-			Serial.printf("MSG: WiFi disconnected, ssid: %-.32s, reason: %d, rssi: %d\n",
-				info.wifi_sta_disconnected.ssid,
-				info.wifi_sta_disconnected.reason,
-				info.wifi_sta_disconnected.rssi
+			Serial.printf("MSG: WiFi disconnected, ssid: %-.32s, reason: %d, rssi: %d\n"
+				,	info.wifi_sta_disconnected.ssid
+				,	info.wifi_sta_disconnected.reason
+				,	info.wifi_sta_disconnected.rssi
 				);
 		break;
 
+		case ARDUINO_EVENT_WPS_START:
+			Serial.printf("MSG: ************ WPS Started.\n");
+			SSD1306_Message("WiFi WPS\nStarted");
+			break;
+
 		case ARDUINO_EVENT_WPS_ER_SUCCESS:
-			Serial.printf("MSG: WPS Success.\n");
+			Serial.printf("MSG: ************ WPS Success.\n");
+			SSD1306_Message("WiFi WPS\nOK");
 			break;
 
 		case ARDUINO_EVENT_WPS_ER_FAILED:
-			Serial.printf("MSG: WPS failed, reason %d.\n",
-				info.wps_fail_reason
-			);
+			Serial.printf("MSG: WPS failed, reason %d.\n", info.wps_fail_reason);
+			SSD1306_Message("WiFi WPS\nFAILED %d", info.wps_fail_reason);
 			break;
 
 		case ARDUINO_EVENT_WPS_ER_TIMEOUT:

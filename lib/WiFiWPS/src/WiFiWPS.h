@@ -22,8 +22,9 @@
 #include <esp_sntp.h>				// sNTP lib
 #include <ArduinoOTA.h>				// OTA + mDNS
 
-#define	ARDUINO_EVENT_OTA_START		((arduino_event_id_t)(ARDUINO_EVENT_MAX+1))
-#define	ARDUINO_EVENT_OTA_END		((arduino_event_id_t)(ARDUINO_EVENT_MAX+2))
+#define	ARDUINO_EVENT_WPS_START		((arduino_event_id_t)(ARDUINO_EVENT_MAX+1))
+#define	ARDUINO_EVENT_OTA_START		((arduino_event_id_t)(ARDUINO_EVENT_MAX+2))
+#define	ARDUINO_EVENT_OTA_END		((arduino_event_id_t)(ARDUINO_EVENT_MAX+3))
 
 extern	void	message(WiFiEvent_t event, WiFiEventInfo_t& info);
 
@@ -37,11 +38,18 @@ public:
 	void	getWifiSsidPsk(String& SSID, String& PSK)
 			{ SSID = wifiSSID; PSK = wifiPSK; }
 
+#if 1
+	wl_status_t init();
+	wl_status_t run();
+	const	uint32_t	wps_timer_value = 10*60*1000;	// 500ms
+			uint32_t	wps_timer;
+#else
 	wl_status_t begin();
+#endif
 	void		wpsStart();
 
-	void		handle()
-				{ ArduinoOTA.handle(); }
+//	void		handle()
+//				{ ArduinoOTA.handle(); }
 
 	bool		timeNtpIsSet()			// NTP time is set
 				{ return ntp_time_sync; }
@@ -54,9 +62,8 @@ private:
 	String		wifiSSID;				// SSID from WPS
 	String		wifiPSK;				// PSK from WPS
 
-	volatile	
-	bool		ntp_time_sync;
-	bool		wps_started;
+	volatile	bool	ntp_time_sync;
+	volatile	bool	wps_started;
 
 private:
 	static	class WiFiWPS*		_this;
@@ -71,5 +78,7 @@ private:
 	void onEventHandler(WiFiEvent_t event, WiFiEventInfo_t& info);
 	void onTimeSyncHandler(struct timeval *t);
 };
+
+extern	WiFiWPS	wifiWPS;
 
 //#endif /* WifiWPS_H_ */
