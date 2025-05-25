@@ -39,7 +39,8 @@ public:
 			{ SSID = wifiSSID; PSK = wifiPSK; }
 
 #if 1
-	wl_status_t init();
+	void setup();
+	wl_status_t begin();
 	wl_status_t run();
 	const	uint32_t	wps_timer_value = 10*60*1000;	// 500ms
 			uint32_t	wps_timer;

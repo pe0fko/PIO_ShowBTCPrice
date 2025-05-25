@@ -101,18 +101,14 @@ void setup()
 
 	// Enable the WiFi, WPS, sNTP and OTA
 	wifiWPS.setOTA( OTAHostName, OTAPassword );
-#if 1
-	wifiWPS.init();
-	// delay(2000);		// Wait for the WPS to start
-	if (WiFi.status() == WL_CONNECTED)	// Check if the WiFi is connected
-	{
-		Serial.printf("=== WiFi connected\n");
-	}
-	else
-	{
-		Serial.printf("=== WiFi not connected, start WPS\n");
-		// wifiWPS.wpsStart();
-	}
+
+	#if 1
+	wifiWPS.setup();
+
+	// wifiWPS.begin();
+	WiFi.begin();
+	// WiFi.begin("SFR_4361", "wfu59rx7a1njziw9bxiu");
+
 #else
 	wifiWPS.begin();
 //	wifiWPS.getWifiSsidPsk(ssid, psk);	// Retrieve the WPS SSID/PSK
@@ -131,7 +127,7 @@ void loop()
 	{
 		Message_Value = 0;
 	}
-	else
+
 	if (wifiWPS.run() != WL_CONNECTED)
 	{
 		// Serial.printf("Error: WiFi status not connect!\n");
@@ -303,7 +299,11 @@ void JsonDecode(const char* json)
 #endif
 
 	int btc = doc["last"];
-	log_d("Value BTC is %d euro.", btc);
+
+	log_i("Value BTC is %d euro.", btc);
+	Serial.printf("Value BTC: %d euro.\n", btc);
+
+	if (btc == 0) return;
 
 	displayInit();
 
@@ -521,11 +521,6 @@ int SSD1306_Message(const char* format, ...)
 			break;
 
 		case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-			// Serial.printf("MSG: WiFi IP: %s, GW: %s, NM: %s\n", 
-			// 	IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(),
-			// 	IPAddress(info.got_ip.ip_info.gw.addr).toString().c_str(),
-			// 	IPAddress(info.got_ip.ip_info.netmask.addr).toString().c_str()
-			// );
 #ifdef DEBUG
 			SSD1306_Message("WiFi IP\n%s\nGW:%s\nNM:%s"
 				,	IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str()
@@ -536,11 +531,11 @@ int SSD1306_Message(const char* format, ...)
 			break;
 
 		case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-			Serial.printf("MSG: WiFi disconnected, ssid: %-.32s, reason: %d, rssi: %d\n"
-				,	info.wifi_sta_disconnected.ssid
-				,	info.wifi_sta_disconnected.reason
-				,	info.wifi_sta_disconnected.rssi
-				);
+			// Serial.printf("MSG: WiFi disconnected, ssid: %-.32s, reason: %d, rssi: %d\n"
+			// 	,	info.wifi_sta_disconnected.ssid
+			// 	,	info.wifi_sta_disconnected.reason
+			// 	,	info.wifi_sta_disconnected.rssi
+			// 	);
 		break;
 
 		case ARDUINO_EVENT_WPS_START:
@@ -558,23 +553,23 @@ int SSD1306_Message(const char* format, ...)
 			SSD1306_Message("WiFi WPS\nFAILED %d", info.wps_fail_reason);
 			break;
 
-		case ARDUINO_EVENT_WPS_ER_TIMEOUT:
-			Serial.printf("MSG: WPS timeout.\n");
-			break;
+		// case ARDUINO_EVENT_WPS_ER_TIMEOUT:
+		// 	Serial.printf("MSG: WPS timeout.\n");
+		// 	break;
 
-		case ARDUINO_EVENT_WPS_ER_PIN:
-			Serial.printf("MSG: WPS PIN code %.8s.\n",
-				info.wps_er_pin.pin_code
-			);
-			break;
+		// case ARDUINO_EVENT_WPS_ER_PIN:
+		// 	Serial.printf("MSG: WPS PIN code %.8s.\n",
+		// 		info.wps_er_pin.pin_code
+		// 	);
+		// 	break;
 
-		case ARDUINO_EVENT_OTA_START:		// **No info struct**
-			Serial.printf("MSG: OTA Started.\n");
-			break;
+		// case ARDUINO_EVENT_OTA_START:		// **No info struct**
+		// 	Serial.printf("MSG: OTA Started.\n");
+		// 	break;
 
-		case ARDUINO_EVENT_OTA_END:			// **No info struct**
-			Serial.printf("MSG: OTA Ended, REBOOT.\n");
-			break;
+		// case ARDUINO_EVENT_OTA_END:			// **No info struct**
+		// 	Serial.printf("MSG: OTA Ended, REBOOT.\n");
+		// 	break;
 
 		default:
 			break;

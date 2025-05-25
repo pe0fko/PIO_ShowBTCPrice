@@ -68,7 +68,7 @@ void WiFiWPS::onEventHandler(WiFiEvent_t event, WiFiEventInfo_t& info)
 			
 			// ArduinoOTA.onEnd([](void){
 			// 	int nullData = 0;
-			// 	::message(ARDUINO_EVENT_OTA_START, (arduino_event_info_t&)nullData);
+			// 	::message(ARDUINO_EVENT_OTA_END, (arduino_event_info_t&)nullData);
 			// });
 			
 			ArduinoOTA.begin();
@@ -109,10 +109,6 @@ void WiFiWPS::onEventHandler(WiFiEvent_t event, WiFiEventInfo_t& info)
 	}
 	break;
 
-	// case ARDUINO_EVENT_WPS_START:
-	// 	log_i("***** ARDUINO_EVENT_WPS_START *****");
-	// 	break;
-
 	case ARDUINO_EVENT_WPS_ER_FAILED:
 		ESP_ERROR_CHECK( esp_wifi_wps_disable() );
 		wps_started = false;
@@ -152,7 +148,7 @@ void WiFiWPS::wpsStart()
 	}
 }
 
-wl_status_t WiFiWPS::init()
+void WiFiWPS::setup()
 {
 	int count = 0;
 	int status;
@@ -168,14 +164,17 @@ wl_status_t WiFiWPS::init()
 	pinMode(0, INPUT);							// Boot button, start the WPS (press after the boot code)
 	WiFi.mode(WIFI_MODE_STA);					// Wifi station mode
 	WiFi.persistent(true);						// Set WiFi SSID to persistent to save the credentials
-	// WiFi.setAutoReconnect(false);		// Disable auto reconnect
-	// WiFi.setAutoConnect(false);			// Disable auto connect
+	// WiFi.setAutoReconnect(false);			// Disable auto reconnect
+	// WiFi.setAutoConnect(false);				// Disable auto connect
+}
 
-	// return WiFi.begin();						// Try to connect to NVS Wifi cridentionals
-	WiFi.begin();
-	int cnt = 30;
+wl_status_t WiFiWPS::begin()
+{
+	WiFi.begin();								// Try to connect to NVS Wifi cridentionals
+
+	int cnt = 60;								// Wait 15sec
 	while(cnt-- != 0 && WiFi.status() != WL_CONNECTED) {
-		Serial.print('.'); delay(500);
+		delay(250);
 	}
 	Serial.println();
 
