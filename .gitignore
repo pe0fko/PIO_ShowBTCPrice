@@ -5,3 +5,5 @@
 .vscode/ipch
 logs/
 lib/WiFi_SSID/
+src/config.h
+

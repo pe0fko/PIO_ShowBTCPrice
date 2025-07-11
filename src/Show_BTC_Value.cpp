@@ -40,6 +40,7 @@
 #include <Fonts/FreeSansBold9pt7b.h>		// Sans, Mono, 9, 12 ,18, 24
 #define	BtcFont1		FreeSansBold12pt7b
 #define	BtcFont2		FreeSansBold9pt7b
+#include "config.h"					// Wifi config
 
 #define SCREEN_WIDTH	128			// OLED display width, in pixels
 #define SCREEN_HEIGHT	64			// OLED display height, in pixels
@@ -57,10 +58,6 @@ static		uint32_t	GetHttps_Timer	= 0UL;
 
 static		uint32_t	Message_Value	= 0U;
 static		uint32_t	Message_Timer	= 0UL;
-
-//class		WiFiWPS		wifiWPS;		// Define the WiFi WPS class
-static		String		OTAHostName		= "ShowBtc";
-static		String		OTAPassword		= "pe0fko";
 
 // RTC_DATA_ATTR, 8Kb of RTC memory
 RTC_DATA_ATTR	int		graphDataPionts[GRAPH_SIZE];
@@ -100,19 +97,11 @@ void setup()
 		Serial.printf("=== Boot %d times\n", bootCount);
 
 	// Enable the WiFi, WPS, sNTP and OTA
-	wifiWPS.setOTA( OTAHostName, OTAPassword );
+	wifiWPS.setOTA( OTA_HOSTNAME, OTA_PASSWORD );
 
-	#if 1
 	wifiWPS.setup();
-
-	// wifiWPS.begin();
-	WiFi.begin();
-	// WiFi.begin("SFR_4361", "wfu59rx7a1njziw9bxiu");
-
-#else
 	wifiWPS.begin();
-//	wifiWPS.getWifiSsidPsk(ssid, psk);	// Retrieve the WPS SSID/PSK
-#endif
+	// WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
 	GetHttps_Timer = millis() - GetHttps_Value;
 
