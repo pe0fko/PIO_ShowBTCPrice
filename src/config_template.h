@@ -1,0 +1,5 @@
+#define	WIFI_SSID		"WIFI_SSID"
+#define	WIFI_PASSWORD	"PASSWORD"
+
+#define	OTA_HOSTNAME	"ShowBtc"
+#define	OTA_PASSWORD	"PASSSWORD"
